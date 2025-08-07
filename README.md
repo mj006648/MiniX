@@ -39,7 +39,7 @@
   <tbody>
     <tr>
       <td>com1</td>
-      <td>control-plane</td>
+      <td>worker1</td>
       <td>10.34.48.100</td>
       <td>10.34.48.100</td>
       <td>v1.32.2</td>
@@ -48,7 +48,7 @@
     </tr>
     <tr>
       <td>com2</td>
-      <td>worker1</td>
+      <td>worker2</td>
       <td>10.34.48.101</td>
       <td>10.34.48.101</td>
       <td>v1.32.2</td>
@@ -57,7 +57,7 @@
     </tr>
     <tr>
       <td>com3</td>
-      <td>worker2</td>
+      <td>worker3</td>
       <td>10.34.48.102</td>
       <td>10.34.48.102</td>
       <td>v1.32.2</td>
@@ -65,8 +65,8 @@
       <td>containerd://2.0.3</td>
     </tr>
     <tr>
-      <td>com4</td>
-      <td>worker3</td>
+      <td>Master</td>
+      <td>control-plane</td>
       <td>10.34.48.103</td>
       <td>10.34.48.103</td>
       <td>v1.32.2</td>
