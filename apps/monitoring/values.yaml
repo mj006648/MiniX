@@ -1,0 +1,33 @@
+# Grafana 설정 예시
+grafana:
+  enabled: true
+  # Grafana에 로그인할 초기 비밀번호 설정 (실제 운영 시에는 secret을 사용 권장)
+  # kubectl get secret --namespace monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+  adminPassword: "prom-operator" # 원하는 비밀번호로 변경
+
+# Prometheus 설정 예시
+prometheus:
+  enabled: true
+  prometheusSpec:
+    # 스토리지 크기, 보존 기간 등 설정
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard # Rook-Ceph 등으로 만든 StorageClass 이름으로 변경 가능
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+# 불필요한 컴포넌트 비활성화 예시
+alertmanager:
+  enabled: false
+
+prometheus-node-exporter:
+  enabled: true
+
+kube-state-metrics:
+  enabled: true
+
+# 더 많은 설정은 공식 kube-prometheus-stack의 values.yaml을 참고하세요.
+# https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/values.yaml

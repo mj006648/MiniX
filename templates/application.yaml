@@ -1,0 +1,53 @@
+{{- range $name, $app := .Values.applications }}
+  {{- if $app.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.argo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "{{ $app.syncWave }}"
+spec:
+  project: {{ $.Values.argo.project }}
+  {{- if $app.source.chart }}
+  # CASE 1: Helm 소스를 사용하는 경우 (argocd, rook-ceph)
+  sources:
+    - repoURL: {{ $app.source.repoURL }}
+      chart: {{ $app.source.chart }}
+      targetRevision: {{ $app.source.targetRevision }}
+      helm:
+        releaseName: {{ $name }}
+        valueFiles:
+        {{- range $path := $app.source.helm.valueFiles }}
+        - $values/{{ $path }}
+        {{- end }}
+    - repoURL: {{ $.Values.argo.sourceRepo.url }}
+      targetRevision: {{ $.Values.argo.sourceRepo.branch }}
+      ref: values
+    # 만약 커스텀 메니페스트들이 있다면 경로 추가
+    #   {{- if $app.source.path }}
+    # - repoURL: {{ $.Values.argo.sourceRepo.url }}
+    #   path: {{ $app.source.path }}
+    #   targetRevision: {{ $.Values.argo.sourceRepo.branch }}
+    #   {{- end }}
+  {{- else if $app.source.path }}
+  # CASE 2: 오직 메니페스트만 있는 경우
+  source: # 이 경우는 소스가 하나이므로 'source:' (단수형)
+    repoURL: {{ $.Values.argo.sourceRepo.url }}
+    path: {{ $app.source.path }}
+    targetRevision: {{ $.Values.argo.sourceRepo.branch }}
+  {{- end }}
+
+  destination:
+    server: {{ $.Values.argo.server }}
+    namespace: {{ $app.namespace }}
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  {{- end }}
+{{- end }}
