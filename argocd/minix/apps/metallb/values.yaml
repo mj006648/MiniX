@@ -1,5 +1,6 @@
 # MetalLB 컨트롤러의 리소스 사용량을 지정합니다.
 controller:
+  webhookMode: service
   resources:
     # requests: Kubernetes가 이 Pod를 스케줄링할 때, 최소한 이만큼의 자원이 있는 노드를 찾습니다.
     requests:
