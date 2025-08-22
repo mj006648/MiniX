@@ -7,24 +7,32 @@ argo:
         url: https://github.com/mj006648/MiniX.git
         branch: main
 
+
 # 개별 애플리케이션 설정
 applications:
-  monitoring:
-        enabled: true           # 이 앱을 배포할지 여부
-        namespace: monitoring   # 앱이 설치될 쿠버네티스 네임스페이스
-        syncWave: "10"          # 배포 순서 (숫자가 낮을수록 먼저 배포)
-
-        # source 섹션이 templates/application.yaml의 로직과 일치해야 합니다.
-        # kube-prometheus-stack는 외부 Helm 차트이므로 CASE 1에 해당됩니다.
+    # 단순 yaml 파일들로 관리되는 애플리케이션
+    cluster-config:
+        enabled: true
+        namespace: default
+        syncWave: "-1"
         source:
-            # 외부 Helm 차트 정보
-            repoURL: https://prometheus-community.github.io/helm-charts
-            chart: kube-prometheus-stack
-            targetRevision: "58.2.1" # 사용하려는 차트 버전을 명시 (매우 중요)
-
-            # 이 Helm 차트에 적용할 커스텀 values 파일들의 경로
+            path: "argocd/minix/apps/cluster-config"
+    metallb-resources:
+        enabled: true
+        namespace: metallb
+        syncWave: "1" # metallb Helm 차트 설치가 끝난 후에 실행
+        source:
+            path: "argocd/minix/apps/metallb-resources"
+    # Helm 차트로 관리되는 애플리케이션
+    metallb:
+        enabled: true
+        namespace: metallb
+        syncWave: "0"
+        source:
+            type: helm
+            repoURL: https://metallb.github.io/metallb
+            chart: metallb
+            targetRevision: 0.15.2
             helm:
                 valueFiles:
-                    # $values/ 접두사는 application.yaml 템플릿에 의해 자동으로 붙습니다.
-                    # 우리는 MiniX 저장소 내의 경로만 지정하면 됩니다.
-                    - apps/monitoring/values.yaml
+                    - "argocd/minix/apps/metallb/values.yaml"
