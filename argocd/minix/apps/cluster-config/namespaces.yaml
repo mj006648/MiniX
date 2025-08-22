@@ -23,7 +23,7 @@ metadata:
     annotations:
         "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
     labels:
-        kubernetes.io/metadata.name: metallb
+        kubernetes.io/metadata.name: metallb-system
     name: metallb-system
 ---
 apiVersion: v1
@@ -32,8 +32,8 @@ metadata:
     annotations:
         "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
     labels:
-        kubernetes.io/metadata.name: mx-service
-    name: mx-service
+        kubernetes.io/metadata.name: tx-service
+    name: tx-service
 ---
 apiVersion: v1
 kind: Namespace
