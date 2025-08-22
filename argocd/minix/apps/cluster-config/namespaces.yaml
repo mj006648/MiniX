@@ -24,7 +24,7 @@ metadata:
         "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
     labels:
         kubernetes.io/metadata.name: metallb
-    name: metallb
+    name: metallb-system
 ---
 apiVersion: v1
 kind: Namespace

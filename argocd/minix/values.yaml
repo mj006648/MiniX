@@ -36,7 +36,7 @@ applications:
     # Helm 차트로 관리되는 애플리케이션
     metallb:
         enabled: true
-        namespace: metallb
+        namespace: metallb-system
         syncWave: "0"
         source:
             type: helm
