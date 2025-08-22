@@ -1,0 +1,31 @@
+# MetalLB 컨트롤러의 리소스 사용량을 지정합니다.
+controller:
+  resources:
+    # requests: Kubernetes가 이 Pod를 스케줄링할 때, 최소한 이만큼의 자원이 있는 노드를 찾습니다.
+    requests:
+      cpu: "100m" # CPU 0.1 코어
+      memory: "100Mi" # 메모리 100 메가바이트
+    # limits: 이 Pod가 사용할 수 있는 자원의 최대 한도입니다. 이 한도를 넘으면 Pod가 재시작될 수 있습니다.
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
+
+# MetalLB 스피커(각 노드에 설치됨)의 리소스 사용량을 지정합니다.
+speaker:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "100Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
+
+  # FRR (BGP 모드용 컨테이너) 관련 리소스 설정도 함께 해주는 것이 좋습니다.
+  frr:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "100Mi"
+      limits:
+        cpu: "100m"
+        memory: "100Mi"
