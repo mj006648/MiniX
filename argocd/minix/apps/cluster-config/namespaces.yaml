@@ -5,8 +5,8 @@ metadata:
     annotations:
         "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
     labels:
-        kubernetes.io/metadata.name: mx-argocd
-    name: mx-argocd
+        kubernetes.io/metadata.name: argocd
+    name: argocd
 ---
 apiVersion: v1
 kind: Namespace

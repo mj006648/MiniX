@@ -4,7 +4,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
     name: minix-root-app
-    namespace: mx-argocd
+    namespace: argocd
 spec:
     project: default
     source:
@@ -13,7 +13,7 @@ spec:
         path: argocd/minix
     destination:
         server: https://kubernetes.default.svc
-        namespace: mx-argocd
+        namespace: argocd
     syncPolicy:
         automated:
             prune: true
