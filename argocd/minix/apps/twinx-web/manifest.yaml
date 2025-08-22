@@ -1,0 +1,50 @@
+# twinx-web-service/manifest.yaml
+
+# tx-service 네임스페이스가 없다면 생성합니다.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tx-service
+---
+# twinx-web Pod를 2개 실행하는 Deployment를 정의합니다.
+apiVersion: apps:v1
+kind: Deployment
+metadata:
+  name: twinx-web-deployment
+  namespace: tx-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: twinx-web
+  template:
+    metadata:
+      labels:
+        app: twinx-web
+    spec:
+      # [선택 사항] 특정 노드에 배포하고 싶을 때 사용합니다.
+      # nodeSelector:
+      #   app: twinx-web
+      containers:
+      - name: twinx-web
+        image: quay.io/mj006648/twinx-web:latest
+        ports:
+        - containerPort: 80
+---
+# twinx-web Pod들을 외부와 연결해주는 LoadBalancer 타입의 서비스를 정의합니다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: tx-web-service
+  namespace: tx-service
+spec:
+  selector:
+    app: twinx-web
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  # [핵심!] 서비스 타입을 LoadBalancer로 지정합니다.
+  type: LoadBalancer
+  # [핵심!] MetalLB가 할당해줄 고정 IP를 직접 요청합니다.
+  loadBalancerIP: 10.34.48.240
