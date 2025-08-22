@@ -11,6 +11,10 @@ controller:
       cpu: "100m"
       memory: "100Mi"
 
+crds:
+  # Webhook 연결에 실패하더라도, 일단 리소스 생성을 허용하도록 정책을 변경합니다.
+  validationFailurePolicy: Ignore
+
 # MetalLB 스피커(각 노드에 설치됨)의 리소스 사용량을 지정합니다.
 speaker:
   resources:
