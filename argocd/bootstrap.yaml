@@ -1,0 +1,22 @@
+# argocd/bootstrap.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+    name: minix-root-app
+    namespace: mx-argocd
+spec:
+    project: default
+    source:
+        repoURL: https://github.com/mj006648/MiniX.git
+        targetRevision: main
+        path: argocd/minix
+    destination:
+        server: https://kubernetes.default.svc
+        namespace: mx-argocd
+    syncPolicy:
+        automated:
+            prune: true
+            selfHeal: false
+        syncOptions:
+            - CreateNamespace=true
