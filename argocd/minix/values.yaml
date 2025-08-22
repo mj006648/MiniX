@@ -30,7 +30,7 @@ applications:
       syncWave: "30" # 다른 모든 인프라가 준비된 후 마지막에 배포
       source:
           # 단순 YAML 파일들이 있는 경로를 지정
-          path: "argocd/twinx/apps/twinx-web"
+          path: "argocd/minix/apps/minix-web"
     # Helm 차트로 관리되는 애플리케이션
     metallb:
         enabled: true
