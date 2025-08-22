@@ -23,7 +23,7 @@ applications:
         syncWave: "1" # metallb Helm 차트 설치가 끝난 후에 실행
         source:
             path: "argocd/minix/apps/metallb-resources"
-    twinx-web-service:
+    twinx-web:
       enabled: true
       namespace: tx-service # 이 앱이 배포할 리소스들의 목적지 네임스페이스
       syncWave: "30" # 다른 모든 인프라가 준비된 후 마지막에 배포
