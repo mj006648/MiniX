@@ -17,7 +17,7 @@ service:
   port: 80
   targetPort: 3000
 
-# Prometheus 데이터소스 자동 연동
+# Prometheus 데이터소스 자동 연동 (이것은 남겨두는 것이 매우 편리합니다)
 datasources:
   datasources.yaml:
     apiVersion: 1
@@ -27,27 +27,3 @@ datasources:
       url: http://prometheus-server.monitoring.svc.cluster.local
       access: proxy
       isDefault: true
-
-# 기본 대시보드 자동 추가
-dashboardProviders:
-  dashboardproviders.yaml:
-    apiVersion: 1
-    providers:
-    - name: 'default'
-      orgId: 1
-      folder: ''
-      type: file
-      disableDeletion: false
-      editable: true
-      options:
-        path: /var/lib/grafana/dashboards/default
-dashboards:
-  default:
-    node-exporter:
-      gnetId: 1860
-      revision: 31
-      datasource: Prometheus
-    kubelet:
-      gnetId: 15761
-      revision: 11
-      datasource: Prometheus
