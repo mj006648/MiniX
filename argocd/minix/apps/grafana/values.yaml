@@ -1,11 +1,5 @@
 
 # Grafana 설정을 저장할 영구 볼륨 설정
-persistence:
-  enabled: true
-  type: pvc
-  size: "5Gi"
-  storageClass: "rook-ceph-block"
-
 # 외부 접속을 위한 서비스 설정
 service:
   type: LoadBalancer
