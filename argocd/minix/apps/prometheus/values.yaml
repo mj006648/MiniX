@@ -1,0 +1,57 @@
+# Prometheus 서버 설정
+server:
+  # StatefulSet을 사용하여 데이터를 안전하게 관리하고, 여러 복제본 운영이 가능하도록 합니다.
+  statefulSet:
+    enabled: true
+  
+  # 프로메테우스 데이터를 저장할 영구 볼륨(Persistent Volume)을 활성화합니다.
+  persistentVolume:
+    enabled: true
+    size: "10Gi" # 데이터 저장 공간 크기 (필요에 따라 조절)
+    # 사용할 스토리지 클래스를 지정합니다.
+    storageClass: "rook-ceph-block"
+
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m" # 1 core
+      memory: "2Gi"
+
+# Alertmanager 설정 (알림 관리)
+alertmanager:
+  # Alertmanager의 상태 정보를 저장할 영구 볼륨을 활성화합니다.
+  persistence:
+    enabled: true
+    size: "2Gi"
+    # 사용할 스토리지 클래스를 지정합니다.
+    storageClass: "rook-ceph-block"
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# 각 노드의 메트릭을 수집하는 Node Exporter 설정
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+
+# 쿠버네티스 오브젝트 상태 메트릭을 수집하는 Kube State Metrics 설정
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"

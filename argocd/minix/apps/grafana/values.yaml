@@ -1,0 +1,53 @@
+# Grafana 관리자 비밀번호를 미리 생성된 Secret에서 가져오도록 설정
+admin:
+  existingSecret: "grafana-admin-credentials"
+  userKey: admin-user
+  passwordKey: admin-password
+
+# Grafana 설정을 저장할 영구 볼륨 설정
+persistence:
+  enabled: true
+  type: pvc
+  size: "5Gi"
+  storageClass: "rook-ceph-block"
+
+# 외부 접속을 위한 서비스 설정
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 3000
+
+# Prometheus 데이터소스 자동 연동
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      url: http://prometheus-server.monitoring.svc.cluster.local
+      access: proxy
+      isDefault: true
+
+# 기본 대시보드 자동 추가
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+        path: /var/lib/grafana/dashboards/default
+dashboards:
+  default:
+    node-exporter:
+      gnetId: 1860
+      revision: 31
+      datasource: Prometheus
+    kubelet:
+      gnetId: 15761
+      revision: 11
+      datasource: Prometheus

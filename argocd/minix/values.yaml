@@ -25,7 +25,14 @@ applications:
       syncWave: "1"
       source:
         path: "argocd/minix/apps/metallb-resources"
-    
+    grafana-resources:
+      enabled: true
+      namespace: monitoring
+      syncWave: "2" # Prometheus보다 먼저 실행되어야 함
+      source:
+        # 일반 YAML 파일이 있는 경로를 지정
+        path: "argocd/minix/apps/grafana-resources"
+
     twinx-web:
       enabled: true
       namespace: tx-service
@@ -46,3 +53,31 @@ applications:
             helm:
                 valueFiles:
                     - "argocd/minix/apps/metallb/values.yaml"
+
+    # Prometheus 스택 배포
+    prometheus:
+      enabled: true
+      namespace: monitoring
+      syncWave: "3" # Secret이 준비된 후 실행
+      source:
+        type: helm
+        repoURL: https://prometheus-community.github.io/helm-charts
+        chart: prometheus
+        targetRevision: 27.32.0
+        helm:
+          valueFiles:
+            - "argocd/minix/apps/prometheus/values.yaml"
+
+    # Grafana 배포
+    grafana:
+      enabled: true
+      namespace: monitoring
+      syncWave: "4" # Secret과 Prometheus가 모두 준비된 후 실행
+      source:
+        type: helm
+        repoURL: https://grafana.github.io/helm-charts
+        chart: grafana
+        targetRevision: 9.3.4
+        helm:
+          valueFiles:
+            - "argocd/minix/apps/grafana/values.yaml"
