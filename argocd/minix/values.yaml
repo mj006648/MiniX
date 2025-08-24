@@ -25,6 +25,7 @@ applications:
       syncWave: "1"
       source:
         path: "argocd/minix/apps/metallb-resources"
+
     grafana-resources:
       enabled: true
       namespace: monitoring
