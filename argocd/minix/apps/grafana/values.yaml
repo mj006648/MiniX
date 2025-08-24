@@ -1,8 +1,3 @@
-# Grafana 관리자 비밀번호를 미리 생성된 Secret에서 가져오도록 설정
-admin:
-  existingSecret: "grafana-admin-credentials"
-  userKey: admin-user
-  passwordKey: admin-password
 
 # Grafana 설정을 저장할 영구 볼륨 설정
 persistence:
