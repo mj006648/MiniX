@@ -1,8 +1,5 @@
-# Grafana 관리자 비밀번호를 미리 생성된 Secret에서 가져오도록 설정
-admin:
-  existingSecret: "grafana-admin-credentials"
-  userKey: admin-user
-  passwordKey: admin-password
+# Grafana 관리자 비밀번호를 Helm 차트 값으로 직접 설정
+adminPassword: "netai0070"  # 여기에 원하는 관리자 비밀번호를 직접 입력하세요.
 
 # Grafana 설정을 저장할 영구 볼륨 설정
 persistence:
@@ -17,13 +14,15 @@ service:
   port: 80
   targetPort: 3000
 
-# Prometheus 데이터소스 자동 연동 (이것은 남겨두는 것이 매우 편리합니다)
+# Prometheus 데이터소스 자동 연동
 datasources:
   datasources.yaml:
     apiVersion: 1
     datasources:
     - name: Prometheus
       type: prometheus
+      # ArgoCD 앱 배포 순서에 따라 Prometheus가 먼저 배포되므로 이 주소는 유효합니다.
       url: http://prometheus-server.monitoring.svc.cluster.local
       access: proxy
       isDefault: true
+
