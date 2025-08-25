@@ -27,3 +27,39 @@ datasources:
       url: http://prometheus-server.monitoring.svc.cluster.local
       access: proxy
       isDefault: true
+
+# ------------------------------------------------------------------ #
+# Grafana 대시보드 자동 프로비저닝
+# ------------------------------------------------------------------ #
+
+# 1. Grafana에게 대시보드를 찾을 폴더를 알려줍니다.
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+        path: /var/lib/grafana/dashboards/default
+
+# 2. 위에서 지정한 폴더에 넣을 대시보드들을 Grafana.com에서 다운로드하도록 설정합니다.
+dashboards:
+  default:
+    # Node Exporter Full 대시보드 (ID: 1860)
+    node-exporter:
+      # Grafana.com의 대시보드 ID
+      gnetId: 1860
+      # 대시보드 리비전 번호 (버전)
+      revision: 1
+      # 이 대시보드가 사용할 데이터소스 이름 (위에서 정의한 이름과 일치해야 함)
+      datasource: Prometheus
+
+    # Kubelet 대시보드 (ID: 15757)
+    kubelet:
+      gnetId: 15757
+      revision: 3
+      datasource: Prometheus
