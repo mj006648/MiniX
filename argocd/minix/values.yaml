@@ -26,6 +26,14 @@ applications:
       source:
         path: "argocd/minix/apps/metallb-resources"
 
+    # Grafana Secret을 가장 먼저 배포
+    grafana-resources:
+      enabled: true
+      namespace: monitoring
+      syncWave: "2" # Prometheus보다 먼저 실행되어야 함
+      source:
+        path: "argocd/minix/apps/grafana-resources"
+
     twinx-web:
       enabled: true
       namespace: tx-service
