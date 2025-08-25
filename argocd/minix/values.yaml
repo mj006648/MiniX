@@ -60,3 +60,16 @@ applications:
         helm:
           valueFiles:
             - "argocd/minix/apps/prometheus/values.yaml"
+    # Grafana 배포
+    grafana:
+      enabled: true
+      namespace: monitoring
+      syncWave: "4" # Prometheus가 준비된 후 실행되도록 순서를 조정합니다.
+      source:
+        type: helm
+        repoURL: https://grafana.github.io/helm-charts
+        chart: grafana
+        targetRevision: 9.3.4
+        helm:
+          valueFiles:
+            - "argocd/minix/apps/grafana/values.yaml"
