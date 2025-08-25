@@ -26,6 +26,13 @@ applications:
       source:
         path: "argocd/minix/apps/metallb-resources"
 
+    grafana-resources:
+      enabled: true
+      namespace: monitoring
+      syncWave: "2"
+      source:
+        path: "argocd/minix/apps/grafana-resources"      
+
     twinx-web:
       enabled: true
       namespace: tx-service
