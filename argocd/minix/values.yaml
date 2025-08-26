@@ -28,7 +28,7 @@ applications:
 
     # Grafana Secret을 가장 먼저 배포
     grafana-resources:
-      enabled: false
+      enabled: true
       namespace: monitoring
       syncWave: "5" # Prometheus보다 먼저 실행되어야 함
       source:
@@ -36,7 +36,7 @@ applications:
 
     # Wave 12: 클러스터가 준비된 후, 스토리지 리소스와 툴박스를 배포 (YAML)
     rook-ceph-resources:
-      enabled: false
+      enabled: true
       namespace: rook-ceph # 리소스들이 생성될 기본 네임스페이스
       syncWave: "3"
       source:
@@ -65,7 +65,7 @@ applications:
 
     # Prometheus 스택 배포
     prometheus:
-      enabled: false
+      enabled: true
       namespace: monitoring
       syncWave: "6" # Secret이 준비된 후 실행
       source:
@@ -78,7 +78,7 @@ applications:
             - "argocd/minix/apps/prometheus/values.yaml"
     # Grafana 배포
     grafana:
-      enabled: false
+      enabled: true
       namespace: monitoring
       syncWave: "7" # Prometheus가 준비된 후 실행되도록 순서를 조정합니다.
       source:
