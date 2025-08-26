@@ -105,7 +105,7 @@ applications:
 
     # Wave 11: Ceph 클러스터 "자체"만 배포 (헬름)
     rook-ceph-cluster:
-      enabled: false
+      enabled: true
       namespace: rook-ceph
       syncWave: "2"
       source:
