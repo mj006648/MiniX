@@ -92,7 +92,7 @@ applications:
 
     # Wave 10: Operator 배포 (헬름)
     rook-ceph-operator:
-      enabled: false
+      enabled: true
       namespace: rook-ceph
       syncWave: "1"
       source:
