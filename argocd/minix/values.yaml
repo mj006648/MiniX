@@ -40,7 +40,7 @@ applications:
       namespace: rook-ceph # 리소스들이 생성될 기본 네임스페이스
       syncWave: "3"
       source:
-        path: "argod/minix/apps/rook-ceph-resources"
+        path: "argocd/minix/apps/rook-ceph-resources"
 
     twinx-web:
       enabled: true
@@ -101,7 +101,7 @@ applications:
         targetRevision: v1.17.6
         helm:
           valueFiles:
-            - "argod/minix/apps/rook-ceph-operator/values.yaml"
+            - "argocd/minix/apps/rook-ceph-operator/values.yaml"
 
     # Wave 11: Ceph 클러스터 "자체"만 배포 (헬름)
     rook-ceph-cluster:
@@ -114,4 +114,4 @@ applications:
         targetRevision: v1.17.6
         helm:
           valueFiles:
-            - "argod/minix/apps/rook-ceph-cluster/values.yaml"
+            - "argocd/minix/apps/rook-ceph-cluster/values.yaml"
