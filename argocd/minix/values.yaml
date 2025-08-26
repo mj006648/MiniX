@@ -22,7 +22,7 @@ applications:
     metallb-resources:
       enabled: true
       namespace: metallb-system
-      syncWave: "1"
+      syncWave: "4"
       source:
         path: "argocd/minix/apps/metallb-resources"
 
@@ -30,9 +30,17 @@ applications:
     grafana-resources:
       enabled: true
       namespace: monitoring
-      syncWave: "2" # Prometheus보다 먼저 실행되어야 함
+      syncWave: "5" # Prometheus보다 먼저 실행되어야 함
       source:
         path: "argocd/minix/apps/grafana-resources"
+
+    # Wave 12: 클러스터가 준비된 후, 스토리지 리소스와 툴박스를 배포 (YAML)
+    rook-ceph-resources:
+      enabled: true
+      namespace: rook-ceph # 리소스들이 생성될 기본 네임스페이스
+      syncWave: "3"
+      source:
+        path: "argod/minix/apps/rook-ceph-resources"
 
     twinx-web:
       enabled: true
@@ -59,7 +67,7 @@ applications:
     prometheus:
       enabled: true
       namespace: monitoring
-      syncWave: "3" # Secret이 준비된 후 실행
+      syncWave: "6" # Secret이 준비된 후 실행
       source:
         type: helm
         repoURL: https://prometheus-community.github.io/helm-charts
@@ -72,7 +80,7 @@ applications:
     grafana:
       enabled: true
       namespace: monitoring
-      syncWave: "4" # Prometheus가 준비된 후 실행되도록 순서를 조정합니다.
+      syncWave: "7" # Prometheus가 준비된 후 실행되도록 순서를 조정합니다.
       source:
         type: helm
         repoURL: https://grafana.github.io/helm-charts
@@ -81,3 +89,29 @@ applications:
         helm:
           valueFiles:
             - "argocd/minix/apps/grafana/values.yaml"
+
+    # Wave 10: Operator 배포 (헬름)
+    rook-ceph-operator:
+      enabled: true
+      namespace: rook-ceph
+      syncWave: "1"
+      source:
+        repoURL: https://charts.rook.io/release
+        chart: rook-ceph
+        targetRevision: v1.17.6
+        helm:
+          valueFiles:
+            - "argod/minix/apps/rook-ceph-operator/values.yaml"
+
+    # Wave 11: Ceph 클러스터 "자체"만 배포 (헬름)
+    rook-ceph-cluster:
+      enabled: true
+      namespace: rook-ceph
+      syncWave: "2"
+      source:
+        repoURL: https://charts.rook.io/release
+        chart: rook-ceph-cluster
+        targetRevision: v1.17.6
+        helm:
+          valueFiles:
+            - "argod/minix/apps/rook-ceph-cluster/values.yaml"

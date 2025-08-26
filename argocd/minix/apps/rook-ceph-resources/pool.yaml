@@ -1,0 +1,31 @@
+# apps/rook-ceph-resources/pool.yaml
+
+# 1. 블록 스토리지 풀
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: replicapool
+  namespace: rook-ceph
+spec:
+  failureDomain: host
+  replicated:
+    size: 3
+---
+# 2. 파일 시스템 (메타데이터 풀과 데이터 풀 포함)
+apiVersion: ceph.rook.io/v1
+kind: CephFilesystem
+metadata:
+  name: myfs
+  namespace: rook-ceph
+spec:
+  metadataPool:
+    replicated:
+      size: 3
+  dataPools:
+    - name: replicated
+      replicated:
+        size: 3
+  preserveFilesystemOnDelete: true
+  metadataServer:
+    activeCount: 1
+    activeStandby: true

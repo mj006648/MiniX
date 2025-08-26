@@ -1,0 +1,27 @@
+# apps/rook-ceph-operator/values.yaml
+
+# CRD(Custom Resource Definition)를 헬름 차트와 함께 설치합니다.
+# **매우 중요**: 반드시 true로 설정해야 합니다.
+crds:
+  enabled: true
+
+# CSI(Container Storage Interface) 관련 설정을 활성화합니다.
+csi:
+  # Ceph CSI RBD (블록 스토리지) 드라이버 활성화
+  enableRbdDriver: true
+  # Ceph CSI CephFS (파일 스토리지) 드라이버 활성화
+  enableCephfsDriver: true
+
+  # Pod가 스케줄링되지 못하는 경우를 방지하기 위해 Toleration 추가
+  pluginTolerations:
+    - key: "node.cilium.io/agent-not-ready"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+# Operator Pod가 사용할 리소스 요청 및 제한
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 128Mi

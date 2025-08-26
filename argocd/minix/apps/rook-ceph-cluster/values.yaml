@@ -1,0 +1,44 @@
+# apps/rook-ceph-cluster/values.yaml
+
+# 이 클러스터를 관리할 Operator가 설치된 네임스페이스
+operatorNamespace: rook-ceph
+
+# 생성될 CephCluster 리소스의 이름
+clusterName: rook-ceph
+
+# CephCluster 리소스의 상세 명세
+cephClusterSpec:
+  cephVersion:
+    image: quay.io/ceph/ceph:v19.2.2
+  dataDirHostPath: /var/lib/rook
+  mon:
+    count: 3
+    allowMultiplePerNode: false
+  dashboard:
+    enabled: true
+    ssl: true
+  storage:
+    useAllNodes: false
+    useAllDevices: false
+    nodes:
+      - name: "com1"
+        devices:
+          - name: "/dev/mapper/ubuntu--vg-ceph--osd1"
+          - name: "/dev/mapper/ubuntu--vg-ceph--osd2"
+          - name: "/dev/mapper/ubuntu--vg-ceph--osd3"
+      - name: "com2"
+        devices:
+          - name: "/dev/mapper/ubuntu--vg-ceph--osd1"
+          - name: "/dev/mapper/ubuntu--vg-ceph--osd2"
+          - name: "/dev/mapper/ubuntu--vg-ceph--osd3"
+      - name: "com3"
+        devices:
+          - name: "/dev/mapper/ubuntu--vg-ceph--osd1"
+          - name: "/dev/mapper/ubuntu--vg-ceph--osd2"
+          - name: "/dev/mapper/ubuntu--vg-ceph--osd3"
+
+# [중요!] 이 파일에서는 더 이상 스토리지 리소스를 정의하지 않으므로,
+# cephBlockPools:, cephFileSystems:, cephObjectStores: 섹션은 모두 비워두거나 삭제합니다.
+cephBlockPools: []
+cephFileSystems: []
+cephObjectStores: []
