@@ -1,0 +1,21 @@
+apiVersion: platform.confluent.io/v1beta1
+kind: ControlCenter
+metadata:
+  name: controlcenter
+  namespace: confluent
+spec:
+  replicas: 1
+  dataVolumeCapacity: 5Gi
+  storageClass:
+    name: rook-ceph-block-kafka
+  image:
+    application: confluentinc/cp-enterprise-control-center:8.0.0
+    init: confluentinc/confluent-init-container:3.0.1
+  dependencies:
+    kafka:
+      bootstrapEndpoint: kafka.confluent.svc.cluster.local:9071
+    schemaRegistry:
+      url: http://schemaregistry.confluent.svc.cluster.local:8081
+    ksqldb:
+      - name: ksqldb
+        url: http://ksqldb.confluent.svc.cluster.local:8088

@@ -48,7 +48,23 @@ applications:
       syncWave: "30"
       source:
         path: "argocd/minix/apps/twinx-web"
-    
+   
+    # (Operator가 생성된 후, CRD들이 배포되도록)
+    confluent-platform:
+      enabled: true
+      namespace: confluent # 모든 컴포넌트는 confluent 네임스페이스에 배포
+      syncWave: "9"
+      source:
+        path: "argocd/minix/apps/confluent-platform"
+
+    # (플랫폼이 완전히 준비된 후)
+    confluent-resources:
+      enabled: true
+      namespace: confluent
+      syncWave: "10"
+      source:
+        path: "argocd/minix/apps/confluent-resources"
+
     # Helm 차트로 관리되는 애플리케이션
     metallb:
         enabled: true
@@ -115,3 +131,17 @@ applications:
         helm:
           valueFiles:
             - "argocd/minix/apps/rook-ceph-cluster/values.yaml"
+
+    # Wave 20: Confluent Operator (가장 먼저)
+    confluent-operator:
+      enabled: true
+      namespace: confluent
+      syncWave: "8"
+      source:
+        type: helm
+        repoURL: https://packages.confluent.io/helm
+        chart: confluent-for-kubernetes
+        targetRevision: 0.1263.8 # 최신버전
+        helm:
+          valueFiles:
+            - "argocd/minix/apps/confluent-operator/values.yaml"
