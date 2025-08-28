@@ -59,7 +59,7 @@ applications:
 
     # (플랫폼이 완전히 준비된 후)
     confluent-resources:
-      enabled: false
+      enabled: true
       namespace: confluent
       syncWave: "10"
       source:
