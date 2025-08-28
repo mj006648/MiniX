@@ -18,7 +18,7 @@ spec:
         memory: "1Gi"
       limits:
         cpu: "500m"
-        memory: "4Gi"
+        memory: "2Gi"
   configOverrides:
     server:
       - metadata.log.segment.bytes=536870912
