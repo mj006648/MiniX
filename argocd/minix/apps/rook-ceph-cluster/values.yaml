@@ -1,5 +1,3 @@
-# apps/rook-ceph-cluster/values.yaml
-
 # 이 클러스터를 관리할 Operator가 설치된 네임스페이스
 operatorNamespace: rook-ceph
 
@@ -17,6 +15,28 @@ cephClusterSpec:
   dashboard:
     enabled: true
     ssl: true
+  resources:
+    mon:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+    osd:
+      requests:
+        cpu: "250m"
+        memory: "1Gi"
+      limits:
+        cpu: "500m"
+        memory: "2Gi"
+    mgr:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
   storage:
     useAllNodes: false
     useAllDevices: false
