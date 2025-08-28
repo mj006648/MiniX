@@ -6,8 +6,8 @@ metadata:
 spec:
   replicas: 1
   image:
-    application: confluentinc/cp-schema-registry:8.0.0
-    init: confluentinc/confluent-init-container:3.0.1
+    application: confluentinc/cp-schema-registry:7.9.2
+    init: confluentinc/confluent-init-container:2.11.2
   dependencies:
     kafka:
       bootstrapEndpoint: kafka.confluent.svc.cluster.local:9071

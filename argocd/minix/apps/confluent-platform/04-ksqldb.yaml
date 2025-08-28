@@ -9,8 +9,8 @@ spec:
   storageClass:
     name: rook-ceph-block-kafka
   image:
-    application: confluentinc/cp-ksqldb-server:8.0.0
-    init: confluentinc/confluent-init-container:3.0.1
+    application: confluentinc/cp-ksqldb-server:7.9.2
+    init: confluentinc/confluent-init-container:2.11.2
   dependencies:
     kafka:
       bootstrapEndpoint: kafka.confluent.svc.cluster.local:9071
