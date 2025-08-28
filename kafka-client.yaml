@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kafka-client
+  namespace: confluent
+spec:
+  containers:
+  - name: kafka-client
+    # 관리 도구가 포함된 cp-kafka 이미지 사용
+    image: confluentinc/cp-kafka:7.9.2
+    # Pod가 바로 종료되지 않도록 무한 대기 명령 실행
+    command: ["sleep", "infinity"]
