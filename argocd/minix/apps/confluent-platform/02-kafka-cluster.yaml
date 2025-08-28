@@ -27,3 +27,6 @@ spec:
     server:
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
+      - "confluent.controlcenter.internal.topics.replication.factor=3"
+      - "confluent.controlcenter.command.topic.replication.factor=3"
+      - "confluent.monitoring.interceptor.topic.replication.factor=3"
