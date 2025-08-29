@@ -33,9 +33,6 @@ spec:
         name: kraftcontroller
   configOverrides:
     server:
-      - "advertised.listeners=EXTERNAL://_{externalListenerName}._{namespace}._{clusterName}._{domain}:9092,INTERNAL://_{internalListenerName}._{namespace}._{clusterName}._{domain}:9071"
-      - "listener.security.protocol.map=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT"
-      - "inter.broker.listener.name=INTERNAL"
       - "min.insync.replicas=2"
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
