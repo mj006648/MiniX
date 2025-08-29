@@ -33,6 +33,16 @@ spec:
         name: kraftcontroller
   configOverrides:
     server:
+      # [추가] advertised.listeners에 각 브로커의 외부 LoadBalancer 서비스 DNS 이름을 직접 지정합니다.
+      - "advertised.listeners=EXTERNAL://kafka-0-lb.confluent.svc.cluster.local:9092,INTERNAL://kafka-0.kafka.confluent.svc.cluster.local:9071" # Broker 0
+      - "advertised.listeners=EXTERNAL://kafka-1-lb.confluent.svc.cluster.local:9092,INTERNAL://kafka-1.kafka.confluent.svc.cluster.local:9071" # Broker 1
+      - "advertised.listeners=EXTERNAL://kafka-2-lb.confluent.svc.cluster.local:9092,INTERNAL://kafka-2.kafka.confluent.svc.cluster.local:9071" # Broker 2
+
+      # [추가] listener.security.protocol.map과 inter.broker.listener.name을 명시하여 안정성 확보
+      - "listener.security.protocol.map=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT"
+      - "inter.broker.listener.name=INTERNAL"
+
+      # --- 클러스터 안정성 및 내부 토픽 설정 (유지) ---
       - "min.insync.replicas=2"
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
