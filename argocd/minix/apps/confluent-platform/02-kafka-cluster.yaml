@@ -33,16 +33,11 @@ spec:
         name: kraftcontroller
   configOverrides:
     server:
-      # [수정] CONTROLLER 리스너 정의를 제거하여 역할 충돌 문제를 해결합니다.
-      - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT"
       - "inter.broker.listener.name=INTERNAL"
-
-      # --- 클러스터 안정성 및 내부 토픽 설정 (유지) ---
+      - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,CONTROLLER:PLAINTEXT"
       - "min.insync.replicas=2"
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
       - "confluent.controlcenter.internal.topics.replication.factor=3"
       - "confluent.controlcenter.command.topic.replication.factor=3"
       - "confluent.monitoring.interceptor.topic.replication.factor=3"
-      - "confluent.schema.topic.replication.factor=3"
-      - "default.replication.factor=3"
