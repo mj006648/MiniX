@@ -17,6 +17,8 @@ spec:
         type: loadBalancer # 'nodePort' 대신 'loadBalancer'를 사용
         loadBalancer:
           domain: minix.local
+      tls:
+        enabled: false
   podTemplate:
     resources:
       requests:
@@ -31,9 +33,19 @@ spec:
         name: kraftcontroller
   configOverrides:
     server:
+      # --- [핵심 추가] advertised.listeners 설정을 LoadBalancer의 '외부 IP'로 하도록 명시합니다. ---
+      # Confluent Operator는 이 설정을 보고 각 브로커의 외부 IP를 동적으로 찾아 advertised.listeners에 설정합니다.
+      # 이 부분이 DNS 해석 실패 문제를 해결합니다.
+      - "advertised.listeners=EXTERNAL://_{externalListenerName}._{namespace}._{clusterName}._{domain}:9092,INTERNAL://_{internalListenerName}._{namespace}._{clusterName}._{domain}:9071"
+      - "listener.security.protocol.map=EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      - "inter.broker.listener.name=INTERNAL"
+
+      # --- 클러스터 안정성 및 내부 토픽 설정 (유지) ---
+      - "min.insync.re pli cas=2"
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
       - "confluent.controlcenter.internal.topics.replication.factor=3"
       - "confluent.controlcenter.command.topic.replication.factor=3"
       - "confluent.monitoring.interceptor.topic.replication.factor=3"
       - "confluent.schema.topic.replication.factor=3"
+      - "default.replication.factor=3"
