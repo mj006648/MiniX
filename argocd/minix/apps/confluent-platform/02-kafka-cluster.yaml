@@ -15,7 +15,7 @@ spec:
     external:
       externalAccess:
         type: loadBalancer # 'nodePort' 대신 'loadBalancer'를 사용
-        loadBalancer: {}
+        loadBalancer: minix.local
   podTemplate:
     resources:
       requests:
