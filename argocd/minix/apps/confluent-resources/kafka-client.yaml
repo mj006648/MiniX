@@ -1,0 +1,15 @@
+# Kafka 클러스터 디버깅 및 관리를 위한 전용 클라이언트 Pod를 배포합니다.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kafka-client
+  namespace: confluent
+spec:
+  # 이 Pod는 항상 실행되도록 설정합니다.
+  restartPolicy: Always
+  containers:
+  - name: kafka-client
+    # kafka-topics, kafka-console-producer 등 모든 관리 도구가 포함된 이미지
+    image: confluentinc/cp-kafka:7.9.2
+    # Pod가 바로 종료되지 않도록 무한 대기 명령 실행
+    command: ["sleep", "infinity"]

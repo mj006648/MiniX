@@ -30,3 +30,4 @@ spec:
       - "confluent.controlcenter.internal.topics.replication.factor=3"
       - "confluent.controlcenter.command.topic.replication.factor=3"
       - "confluent.monitoring.interceptor.topic.replication.factor=3"
+      - "confluent.schema.topic.replication.factor=3"
