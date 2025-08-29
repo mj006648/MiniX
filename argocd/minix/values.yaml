@@ -134,7 +134,7 @@ applications:
 
     # Wave 20: Confluent Operator (가장 먼저)
     confluent-operator:
-      enabled: true
+      enabled: false
       namespace: confluent
       syncWave: "8"
       source:
