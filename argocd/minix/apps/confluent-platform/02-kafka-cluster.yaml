@@ -14,11 +14,10 @@ spec:
   listeners:
     external:
       externalAccess:
-        type: loadBalancer # 'nodePort' 대신 'loadBalancer'를 사용
-        loadBalancer:
-          domain: minix.local
-      tls:
-        enabled: false
+        type: nodePort
+        nodePort:
+          host: 10.34.48.103               # 클러스터 노드 IP
+          nodePortOffset: 31190            # → 31190, 31191, 31192
   podTemplate:
     resources:
       requests:
@@ -35,7 +34,6 @@ spec:
     server:
       - "inter.broker.listener.name=INTERNAL"
       - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,CONTROLLER:PLAINTEXT"
-      - "min.insync.replicas=2"
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
       - "confluent.controlcenter.internal.topics.replication.factor=3"
