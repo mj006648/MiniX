@@ -13,12 +13,16 @@ spec:
       name: external # 이 이름은 external 키와 일치해야 합니다.
       type: loadbalancer
       port: 9092
+      tls:
+        enabled: false
     # CFK는 내부 통신을 위한 internal 리스너를 자동으로 생성하지만,
     # 명시적으로 함께 정의해주는 것이 더 안전하고 명확합니다.
     internal:
       name: internal
       type: internal
       port: 9071
+      tls:
+        enabled: false
   image:
     application: confluentinc/cp-server:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
