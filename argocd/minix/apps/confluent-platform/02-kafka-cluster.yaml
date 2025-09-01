@@ -11,49 +11,12 @@ spec:
   image:
     application: confluentinc/cp-server:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
-    
-  # --- [최종 수정된 부분] ---
-  # 기존 listeners 블록을 아래의 올바른 객체(object) 형식으로 교체합니다.
   listeners:
-    # 내부 통신용 리스너 (key-value 형식)
-    internal:
-      authentication:
-        type: plain
-      name: INTERNAL # listener.security.protocol.map 에서 사용할 이름
-      port: 9071
-      type: internal
-      tls: false
-      
-    # 외부 통신용 리스너 (key-value 형식)
     external:
-      authentication:
-        type: plain
-      name: EXTERNAL # listener.security.protocol.map 에서 사용할 이름
-      port: 9092
-      type: external
       externalAccess:
-        type: nodePort
-        nodePort:
-          # Kafka가 외부에 "이 IP로 접속해" 라고 알려줄 주소
-          host: 10.34.48.103
-          
-          # --- 핵심 수정 ---
-          # 모호한 nodePortOffset 대신, 각 브로커의 포트를 명확하게 지정합니다.
-          # 이렇게 해야 Kafka가 자신의 외부 포트를 정확히 인지하고 클라이언트에게 알려줍니다.
-          
-          # 1. 클라이언트가 처음 접속할 부트스트랩 서비스의 포트
-          bootstrapNodePort: 31190
-          
-          # 2. 각 브로커가 사용할 개별 포트
-          brokerNodePorts:
-            - brokerId: 0
-              nodePort: 31191
-            - brokerId: 1
-              nodePort: 31192
-            - brokerId: 2
-              nodePort: 31193
-  # --- [수정 끝] ---
-  
+        type: loadBalancer # 'nodePort' 대신 'loadBalancer'를 사용
+        loadBalancer:
+          domain: minix.local
   podTemplate:
     resources:
       requests:
@@ -68,10 +31,11 @@ spec:
         name: kraftcontroller
   configOverrides:
     server:
-      - "inter.broker.listener.name=INTERNAL"
-      - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      - "min.insync.replicas=2"
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
       - "confluent.controlcenter.internal.topics.replication.factor=3"
       - "confluent.controlcenter.command.topic.replication.factor=3"
       - "confluent.monitoring.interceptor.topic.replication.factor=3"
+      - "confluent.schema.topic.replication.factor=3"
+      - "default.replication.factor=3"
