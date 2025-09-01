@@ -15,3 +15,6 @@ metadata:
 spec:
   ipAddressPools:
   - primary-pool
+  interfaces:
+  - eno1
+  - eno2
