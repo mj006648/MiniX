@@ -12,14 +12,17 @@ spec:
     application: confluentinc/cp-server:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
   listeners:
+    # 클러스터 내부 통신용 (브로커 간, 다른 컴포넌트 간)
     internal:
       name: INTERNAL # configOverrides 에서 사용할 이름
       port: 9071
       type: internal
+      
+    # 클러스터 외부 통신용 (Omniverse, 외부 클라이언트용)
     external:
-      name: EXTERNAL
+      name: EXTERNAL # configOverrides 에서 사용할 이름
       externalAccess:
-        type: loadBalancer # 'nodePort' 대신 'loadBalancer'를 사용
+        type: loadBalancer
         loadBalancer:
           domain: minix.local
   podTemplate:
@@ -36,9 +39,18 @@ spec:
         name: kraftcontroller
   configOverrides:
     server:
-      - "inter.broker.listener.name=INTERNAL" # 브로커 간 통신은 INTERNAL 리스너를 사용
-      - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT" # 각 리스너의 프로토콜 정의
+      # 브로커들끼리 통신할 때는 'INTERNAL' 리스너를 사용하도록 지정
+      - "inter.broker.listener.name=INTERNAL"
+
+      # --- [핵심 수정 완료] ---
+      # 모든 필수 통신 채널(INTERNAL, EXTERNAL, CONTROLLER, REPLICATION)에 대한
+      # 보안 프로토콜을 명확하게 정의합니다.
+      - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,REPLICATION:PLAINTEXT"
+
+      # 데이터 안정성을 위한 설정
       - "min.insync.replicas=2"
+      
+      # Confluent 플랫폼 내부 토픽들의 복제본 수 설정
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
       - "confluent.controlcenter.internal.topics.replication.factor=3"
