@@ -13,7 +13,7 @@ applications:
     # 단순 yaml 파일들로 관리되는 애플리케이션
     # 첫 번째 애플리케이션
     cluster-config:
-      enabled: true
+      enabled: false
       namespace: default
       syncWave: "-1"
       source:
