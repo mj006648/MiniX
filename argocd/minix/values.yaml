@@ -41,6 +41,9 @@ applications:
       syncWave: "3"
       source:
         path: "argocd/minix/apps/rook-ceph-resources"
+      # 동기화 옵션을 설정하여 서버 측에서 추가된 필드를 무시하도록 합니다.
+      syncOptions:
+        - ServerSideApply=true
 
     twinx-web:
       enabled: true
