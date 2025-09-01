@@ -38,6 +38,8 @@ spec:
         name: kraftcontroller
   configOverrides:
     server:
+      - "inter.broker.listener.name=INTERNAL" # 브로커 간 통신은 INTERNAL 리스너를 사용
+      - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT" # 각 리스너의 프로토콜 정의
       - "min.insync.replicas=2"
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
