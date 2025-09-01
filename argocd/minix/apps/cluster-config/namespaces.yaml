@@ -44,6 +44,15 @@ metadata:
         kubernetes.io/metadata.name: confluent
     name: confluent
 ---
+apiVersion: v1
+kind: Namespace
+metadata:
+    annotations:
+        "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
+    labels:
+        kubernetes.io/metadata.name: accumulation
+    name: accumulation
+---
 
 
 

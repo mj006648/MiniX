@@ -65,6 +65,17 @@ applications:
       source:
         path: "argocd/minix/apps/confluent-resources"
 
+    # Wave 11: 데이터 축적(accumulation)을 위한 네임스페이스와 S3 버킷 생성
+    accumulation:
+      enabled: true
+      # 이 애플리케이션이 관리하는 리소스들이 생성될 기본 네임스페이스
+      namespace: accumulation
+      # Ceph StorageClass(rook-ceph-bucket)가 생성된 후에 실행되어야 하므로 더 높은 syncWave를 부여
+      syncWave: "11"
+      source:
+        # 1단계에서 만든 디렉토리 경로를 정확히 지정
+        path: "argocd/minix/apps/accumulation"
+
     # Helm 차트로 관리되는 애플리케이션
     metallb:
         enabled: true
