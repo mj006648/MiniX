@@ -11,13 +11,35 @@ spec:
   image:
     application: confluentinc/cp-server:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
+
+  # --- [수정된 부분] ---
+  # 기존 listeners 블록을 아래 내용으로 교체합니다.
   listeners:
-    external:
-      externalAccess:
-        type: nodePort
+    # 클러스터 내부 통신용 리스너 (필수)
+    - name: internal
+      port: 9071
+      type: internal
+      tls: false
+      authentication:
+        type: plain
+
+    # 외부 접속을 위한 NodePort 리스너
+    - name: external
+      port: 9092
+      type: nodeport
+      tls: false
+      authentication:
+        type: plain
+      # Kafka 브로커가 외부에 자신의 주소를 "광고(advertise)"할 때 사용할 설정
+      config:
+        # 외부에 알려줄 호스트(IP) 주소를 명시합니다.
+        advertisedHost: 10.34.48.103
+        # 브로커 0번이 사용할 NodePort를 31191로 지정합니다.
+        # Confluent Operator가 자동으로 브로커 1번은 31192, 2번은 31193으로 설정합니다.
         nodePort:
-          host: 10.34.48.103               # 클러스터 노드 IP
-          nodePortOffset: 31190            # → 31190, 31191, 31192
+          firstPort: 31191
+  # --- [수정 끝] ---
+  
   podTemplate:
     resources:
       requests:
