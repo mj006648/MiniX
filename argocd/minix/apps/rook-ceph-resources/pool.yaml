@@ -27,7 +27,7 @@ spec:
         size: 3
   preserveFilesystemOnDelete: true
   metadataServer:
-    activeCount: 1
+    activeCount: 0
     activeStandby: true
   # 3. Ceph Object Store (RGW) 정의
 apiVersion: ceph.rook.io/v1
