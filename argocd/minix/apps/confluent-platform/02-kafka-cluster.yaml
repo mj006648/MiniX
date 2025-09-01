@@ -17,7 +17,6 @@ spec:
       name: INTERNAL # configOverrides 에서 사용할 이름
       port: 9071
       type: internal
-      tls: false
       
     # 클러스터 외부 통신용 (Omniverse, 외부 클라이언트용)
     external:
@@ -26,7 +25,6 @@ spec:
         type: loadBalancer
         loadBalancer:
           domain: minix.local
-      tls: false
   podTemplate:
     resources:
       requests:
