@@ -2,13 +2,21 @@ apiVersion: v1
 kind: Service
 metadata:
   name: rook-ceph-rgw-my-store-external
-  namespace: rook-ceph # RGW Pod이 있는 네임스페이스
+  namespace: rook-ceph
 spec:
   type: LoadBalancer
+  # Operator가 생성한 내부 서비스의 selector를 그대로 복사합니다.
+  # 이렇게 하면 Pod을 정확하게 찾을 수 있습니다.
   selector:
     app: rook-ceph-rgw
-    rgw: my-store # 대상 RGW 인스턴스를 정확히 지정
+    ceph_daemon_id: my-store
+    rgw: my-store
+    rook_cluster: rook-ceph
+    rook_object_store: my-store
   ports:
     - name: http
-      port: 8080 # 외부에서 접속할 포트
-      targetPort: 80 # RGW Pod이 내부적으로 사용하는 포트
+      # 외부에서 접속할 포트 (LoadBalancer IP의 포트)
+      port: 80
+      # Pod이 실제로 요청을 기다리는 포트 (Endpoints 결과와 일치)
+      targetPort: 80
+      protocol: TCP
