@@ -16,8 +16,6 @@ spec:
       name: INTERNAL # configOverrides 에서 사용할 이름
       port: 9071
       type: internal
-      authentication:
-        type: plain
     external:
       name: EXTERNAL
       externalAccess:
