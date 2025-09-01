@@ -54,7 +54,7 @@ applications:
    
     # (Operator가 생성된 후, CRD들이 배포되도록)
     confluent-platform:
-      enabled: true
+      enabled: false
       namespace: confluent # 모든 컴포넌트는 confluent 네임스페이스에 배포
       syncWave: "9"
       source:
@@ -62,7 +62,7 @@ applications:
 
     # (플랫폼이 완전히 준비된 후)
     confluent-resources:
-      enabled: true
+      enabled: false
       namespace: confluent
       syncWave: "10"
       source:
@@ -148,7 +148,7 @@ applications:
 
     # Wave 20: Confluent Operator (가장 먼저)
     confluent-operator:
-      enabled: true
+      enabled: false
       namespace: confluent
       syncWave: "8"
       source:
