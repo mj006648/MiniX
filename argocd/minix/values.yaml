@@ -159,3 +159,18 @@ applications:
         helm:
           valueFiles:
             - "argocd/minix/apps/confluent-operator/values.yaml"
+
+    # Wave 4: PostgreSQL 단일 인스턴스 배포
+    postgresql:
+      enabled: true
+      namespace: postgre
+      syncWave: "12"
+      source:
+        type: helm
+        repoURL: https://charts.bitnami.com/bitnami
+        chart: postgresql
+        #-- 안정적인 배포를 위해 차트 버전을 명시합니다.
+        targetRevision: "16.7.27"
+        helm:
+          valueFiles:
+            - "argocd/minix/apps/postgresql/values.yaml"

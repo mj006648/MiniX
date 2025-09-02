@@ -1,0 +1,63 @@
+# 파일 경로: argocd/minix/apps/postgresql/values.yaml
+
+###############################################################################
+# Bitnami PostgreSQL Helm 차트 values.yaml for ArgoCD
+# 단일 인스턴스, LoadBalancer, Nessie 카탈로그용 구성
+###############################################################################
+
+#-- 아키텍처: 'standalone'으로 설정하여 단일 인스턴스 모드를 명시적으로 지정합니다.
+architecture: standalone
+
+#-- 인증 및 데이터베이스 생성 설정
+auth:
+  # postgres 슈퍼유저의 비밀번호
+  postgresPassword: "postgres_super_password"
+
+  # Nessie 카탈로그용으로 자동 생성할 데이터베이스 이름
+  database: "nessiedb"
+
+  # 위 데이터베이스에 접근할 사용자 이름
+  username: "nessie_user"
+
+  # 위 사용자의 비밀번호
+  password: "nessie_password"
+
+#-- Primary (마스터) PostgreSQL 인스턴스에 대한 상세 설정
+primary:
+  
+  #-- 서비스 외부 노출 방식 설정
+  service:
+    # 서비스를 LoadBalancer 타입으로 설정하여 외부 IP를 할당받습니다.
+    type: LoadBalancer
+    # MetalLB가 IP 풀에서 외부 IP를 자동으로 할당합니다.
+    # 특정 IP를 고정하고 싶다면 loadBalancerIP: "10.34.48.XXX" 와 같이 지정할 수 있습니다.
+
+  #-- 데이터 영속성을 위한 PersistentVolumeClaim(PVC) 설정
+  persistence:
+    enabled: true
+    # 클러스터에 존재하는 동적 프로비저닝 가능한 StorageClass 이름을 정확히 지정해야 합니다.
+    # 예: rook-ceph-block, gp2 등. rook-ceph-block-immediate도 가능합니다.
+    storageClass: "rook-ceph-block"
+    size: 20Gi
+
+  #-- Pod의 리소스 요청량 및 최대 사용량 제한
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+#-- Replica (읽기 전용 복제본)는 사용하지 않도록 비활성화합니다.
+readReplicas:
+  enabled: false
+
+#-- Pod 안의 공유 메모리(/dev/shm) 크기 부족 문제를 방지하기 위해 활성화합니다.
+shmVolume:
+  enabled: true
+  sizeLimit: 1Gi
+
+#-- 볼륨 권한 문제를 해결하기 위한 초기화 컨테이너(init container)를 활성화합니다.
+volumePermissions:
+  enabled: true

@@ -52,4 +52,23 @@ metadata:
     labels:
         kubernetes.io/metadata.name: accumulation
     name: accumulation
----      
+---     
+apiVersion: v1
+kind: Namespace
+metadata:
+    annotations:
+        "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
+    labels:
+        kubernetes.io/metadata.name: postgre
+    name: postgre
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+    annotations:
+        "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
+    labels:
+        kubernetes.io/metadata.name: nessie
+    name: nessie
+---
+
