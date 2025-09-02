@@ -97,7 +97,7 @@ applications:
     spark-jobs:
       enabled: true
       namespace: spark-operator
-      syncWave: "31"
+      syncWave: "15"
       source:
         path: "argocd/minix/apps/spark-jobs" 
     # Helm 차트로 관리되는 애플리케이션
@@ -211,7 +211,7 @@ applications:
             - "argocd/minix/apps/nessie/values.yaml"
      # Wave 30: Spark Operator (공식 Kubeflow Helm Chart 사용)
     spark-operator:
-      enabled: true
+      enabled: false
       namespace: spark-operator
       syncWave: "14"
       source:
