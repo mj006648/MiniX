@@ -1,0 +1,6 @@
+# spark-operator/values.yaml
+# SparkApplication 리소스를 감시하고 잡을 실행할 네임스페이스 지정
+sparkJobNamespace: "spark-operator"
+# Webhook 활성화
+webhook:
+  enable: true
