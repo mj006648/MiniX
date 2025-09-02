@@ -1,0 +1,36 @@
+# 파일 경로: argocd/minix/apps/nessie/values.yaml
+
+# Nessie 서버 Pod의 복제본 수.
+replicaCount: 1
+
+# 사용할 Nessie 이미지 버전을 고정합니다.
+image:
+  tag: "0.104.9"
+
+# 버전 저장소 타입을 JDBC로 설정합니다.
+versionStoreType: JDBC2
+
+# JDBC 데이터베이스 접속 설정
+jdbc:
+  # PostgreSQL 서비스에 내부 DNS 이름으로 접속합니다.
+  # 형식: jdbc:postgresql://<서비스이름>.<네임스페이스>/<DB명>?currentSchema=<스키마명>
+  jdbcUrl: "jdbc:postgresql://postgresql.default/nessiedb?currentSchema=nessie"
+
+  # DB 접속 정보를 담고 있는 Secret을 참조하도록 설정합니다.
+  secret:
+    name: "nessie-db-secret" # 위에서 생성한 Secret 이름
+    username: "username"     # Secret 안의 키 이름
+    password: "password"     # Secret 안의 키 이름
+
+# Nessie Pod의 리소스 요청량 및 최대 사용량 제한
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "1"
+    memory: "2Gi"
+
+# Prometheus 메트릭 수집을 위한 ServiceMonitor를 생성합니다.
+serviceMonitor:
+  enabled: true

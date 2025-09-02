@@ -79,6 +79,21 @@ applications:
         # 1단계에서 만든 디렉토리 경로를 정확히 지정
         path: "argocd/minix/apps/accumulation"
 
+    # Wave 13: Nessie 추가 리소스 (Secret, LoadBalancers)
+    # Helm 차트가 관리하지 않는, 우리가 직접 정의한 추가 리소스들을 배포합니다.
+    nessie-resources:
+      enabled: true
+      namespace: nessie-ns
+      syncWave: "13" # nessie Helm 차트와 동시에 배포
+      source:
+        path: "argocd/minix/apps/nessie"
+        directory:
+          # values.yaml을 제외한 나머지 YAML 파일들만 배포 대상으로 지정
+          exclude: "values.yaml"
+          recurse: true
+      syncOptions:
+        - CreateNamespace=true
+      
     # Helm 차트로 관리되는 애플리케이션
     metallb:
         enabled: true
@@ -174,3 +189,17 @@ applications:
         helm:
           valueFiles:
             - "argocd/minix/apps/postgresql/values.yaml"
+    # Helm 차트를 통해 Nessie의 핵심 워크로드(Deployment, 내부 Service 등)를 배포합니다.
+    nessie:
+      enabled: true
+      namespace: nessie-ns
+      syncWave: "13" # PostgreSQL 이후에 배포되도록 설정
+      source:
+        type: helm
+        repoURL: https://charts.projectnessie.org
+        chart: nessie
+        releaseName: nessie # Helm 릴리스 이름을 'nessie'로 고정
+        targetRevision: "0.104.9"
+        helm:
+          valueFiles:
+            - "argocd/minix/apps/nessie/values.yaml"

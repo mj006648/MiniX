@@ -1,0 +1,17 @@
+# 파일 경로: argocd/minix/apps/nessie/loadbalancer-api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nessie-api-loadbalancer
+  namespace: nessie-ns
+spec:
+  type: LoadBalancer # <-- 타입을 LoadBalancer로 변경
+  selector:
+    # Helm 차트가 생성하는 Nessie Pod의 기본 라벨
+    app.kubernetes.io/name: nessie
+    app.kubernetes.io/instance: nessie
+  ports:
+    - name: http-api
+      port: 19120
+      targetPort: 19120
+      # nodePort는 LoadBalancer 타입에서 자동으로 할당됩니다.
