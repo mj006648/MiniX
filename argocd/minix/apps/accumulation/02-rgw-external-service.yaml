@@ -15,8 +15,9 @@ spec:
     rook_object_store: my-store
   ports:
     - name: http
-      # 외부에서 접속할 포트 (LoadBalancer IP의 포트)
+      # 외부에서 접속할 포트 (LoadBalancer IP의 포트)는 그대로 80을 사용
       port: 80
-      # Pod이 실제로 요청을 기다리는 포트 (Endpoints 결과와 일치)
-      targetPort: 80
+      # ---▼ [수정] Pod이 실제로 요청을 기다리는 포트를 8080으로 변경합니다. ▼---
+      targetPort: 8080
+      # ---▲ [수정] 여기까지 수정합니다. ▲---
       protocol: TCP
