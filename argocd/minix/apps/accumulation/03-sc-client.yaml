@@ -1,38 +1,40 @@
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment  # <-- kind를 Pod에서 Deployment로 변경
 metadata:
-  name: s3-client
-  # 이 Pod은 accumulation 네임스페이스에서 실행됩니다.
+  name: s3-client   # <-- Deployment의 이름
   namespace: accumulation
 spec:
-  containers:
-  - name: mc
-    image: minio/mc
-    # Pod이 항상 실행 상태를 유지하도록 설정
-    command: ["/bin/sh", "-c", "sleep infinity"]
-    env:
-      # --- 'accumulation' 네임스페이스의 Secret/ConfigMap에서 S3 접속 정보를 가져옵니다 ---
-      - name: S3_ACCESS_KEY
-        valueFrom:
-          secretKeyRef:
-            # 'accumulation' 앱이 생성한 Secret 이름
-            name: iceberg-bucket-claim
-            key: AWS_ACCESS_KEY_ID
-      - name: S3_SECRET_KEY
-        valueFrom:
-          secretKeyRef:
-            # 'accumulation' 앱이 생성한 Secret 이름
-            name: iceberg-bucket-claim
-            key: AWS_SECRET_ACCESS_KEY
-      - name: S3_HOST
-        valueFrom:
-          configMapKeyRef:
-            # 'accumulation' 앱이 생성한 ConfigMap 이름
-            name: iceberg-bucket-claim
-            key: BUCKET_HOST
-      - name: S3_BUCKET
-        valueFrom:
-          configMapKeyRef:
-            # 'accumulation' 앱이 생성한 ConfigMap 이름
-            name: iceberg-bucket-claim
-            key: BUCKET_NAME
+  replicas: 1
+  selector:
+    matchLabels:
+      app: s3-client # <-- 이 Deployment가 관리할 파드를 찾는 라벨
+  template: # <-- 여기서부터가 실제 파드의 명세입니다 (Pod spec).
+    metadata:
+      labels:
+        app: s3-client # <-- 파드에 붙일 라벨
+    spec:
+      containers:
+      - name: mc
+        image: minio/mc
+        command: ["/bin/sh", "-c", "sleep infinity"]
+        env:
+          - name: S3_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: iceberg-bucket-claim
+                key: AWS_ACCESS_KEY_ID
+          - name: S3_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: iceberg-bucket-claim
+                key: AWS_SECRET_ACCESS_KEY
+          - name: S3_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: iceberg-bucket-claim
+                key: BUCKET_HOST
+          - name: S3_BUCKET
+            valueFrom:
+              configMapKeyRef:
+                name: iceberg-bucket-claim
+                key: BUCKET_NAME
