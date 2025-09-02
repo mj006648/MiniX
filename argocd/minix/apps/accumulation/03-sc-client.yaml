@@ -30,12 +30,6 @@ spec:
             # 'accumulation' 앱이 생성한 ConfigMap 이름
             name: iceberg-bucket-claim
             key: BUCKET_HOST
-      - name: S3_PORT
-        valueFrom:
-          configMapKeyRef:
-            # 'accumulation' 앱이 생성한 ConfigMap 이름
-            name: iceberg-bucket-claim
-            key: BUCKET_PORT
       - name: S3_BUCKET
         valueFrom:
           configMapKeyRef:
