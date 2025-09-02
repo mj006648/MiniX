@@ -14,7 +14,7 @@ versionStoreType: JDBC2
 jdbc:
   # PostgreSQL 서비스에 내부 DNS 이름으로 접속합니다.
   # 형식: jdbc:postgresql://<서비스이름>.<네임스페이스>/<DB명>?currentSchema=<스키마명>
-  jdbcUrl: "jdbc:postgresql://postgresql.default/nessiedb?currentSchema=nessie"
+  jdbcUrl: "jdbc:postgresql://postgresql.postgre/nessiedb?currentSchema=nessie"
 
   # DB 접속 정보를 담고 있는 Secret을 참조하도록 설정합니다.
   secret:
