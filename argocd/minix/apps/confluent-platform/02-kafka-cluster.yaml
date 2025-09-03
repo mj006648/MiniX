@@ -1,4 +1,4 @@
-# 파일: confluent-platform/02-kafka-cluster.yaml (최종 수정본 2)
+# 파일: confluent-platform/02-kafka-cluster.yaml (최종 수정본 3)
 apiVersion: platform.confluent.io/v1beta1
 kind: Kafka
 metadata:
@@ -22,7 +22,6 @@ spec:
       externalAccess:
         type: loadBalancer
         loadBalancer:
-          # Operator의 유효성 검사를 통과하기 위한 필수 필드
           domain: minix.local
   podTemplate:
     resources:
@@ -39,12 +38,10 @@ spec:
   configOverrides:
     server:
       - "inter.broker.listener.name=INTERNAL"
-      
-      # ★★★★★ [오류 수정] ★★★★★
-      # REPLICATION 리스너에 대한 보안 프로토콜 정의를 추가합니다.
       - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT"
-
-      # 외부 접속을 위한 핵심 설정
+      
+      # ★★★★★ [오타 수정] ★★★★★
+      # $(KAF-BROKER-ID) -> $(KAFKA_BROKER_ID) 로 수정했습니다.
       - "advertised.listeners=INTERNAL://kafka-$(KAFKA_BROKER_ID).kafka.confluent.svc.cluster.local:9071,EXTERNAL://${CFK_EXTERNAL_LISTENER_HOST}:$(CFK_EXTERNAL_LISTENER_PORT)"
       
       - "min.insync.replicas=2"
