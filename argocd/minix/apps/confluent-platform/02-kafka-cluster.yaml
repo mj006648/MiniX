@@ -1,4 +1,4 @@
-# 파일: confluent-platform/02-kafka-cluster.yaml (최종 수정본 3)
+# 파일: confluent-platform/02-kafka-cluster.yaml (최종 완성본)
 apiVersion: platform.confluent.io/v1beta1
 kind: Kafka
 metadata:
@@ -40,9 +40,9 @@ spec:
       - "inter.broker.listener.name=INTERNAL"
       - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT"
       
-      # ★★★★★ [오타 수정] ★★★★★
-      # $(KAF-BROKER-ID) -> $(KAFKA_BROKER_ID) 로 수정했습니다.
-      - "advertised.listeners=INTERNAL://kafka-$(KAFKA_BROKER_ID).kafka.confluent.svc.cluster.local:9071,EXTERNAL://${CFK_EXTERNAL_LISTENER_HOST}:$(CFK_EXTERNAL_LISTENER_PORT)"
+      # ★★★★★ [문법 수정] ★★★★★
+      # $(KAFKA_BROKER_ID) -> ${KAFKA_BROKER_ID} 로 올바른 문법으로 수정했습니다.
+      - "advertised.listeners=INTERNAL://kafka-${KAFKA_BROKER_ID}.kafka.confluent.svc.cluster.local:9071,EXTERNAL://${CFK_EXTERNAL_LISTENER_HOST}:${CFK_EXTERNAL_LISTENER_PORT}"
       
       - "min.insync.replicas=2"
       - "confluent.license.topic.replication.factor=3"
