@@ -1,0 +1,19 @@
+# s3-sink-connector.yaml (최소 버전 테스트)
+apiVersion: platform.confluent.io/v1beta1
+kind: KafkaConnector
+metadata:
+  name: s3-sink-parking-events
+  namespace: confluent
+spec:
+  kafkaClusterRef:
+    name: kafka
+  connectClusterRef:
+    name: connect
+  maxTasks: 1
+  configs:
+    "connector.class": "io.confluent.connect.s3.S3SinkConnector"
+    "topics": "parking-entries"
+    "s3.bucket.name": "iceberg"
+    "store.url": "http://rook-ceph-rgw-my-store.rook-ceph.svc:80"
+  secretRef:
+    name: s3-credentials
