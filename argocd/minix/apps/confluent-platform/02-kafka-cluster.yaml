@@ -1,4 +1,4 @@
-# 파일: confluent-platform/02-kafka-cluster.yaml (진짜 최종 완성본)
+# 파일: confluent-platform/02-kafka-cluster.yaml (원래 방식으로 복원)
 apiVersion: platform.confluent.io/v1beta1
 kind: Kafka
 metadata:
@@ -22,7 +22,6 @@ spec:
       externalAccess:
         type: loadBalancer
         loadBalancer:
-          # ArgoCD/Operator의 유효성 검사를 통과하기 위한 필수 필드
           domain: minix.local
   podTemplate:
     resources:
@@ -39,12 +38,7 @@ spec:
   configOverrides:
     server:
       - "inter.broker.listener.name=INTERNAL"
-      - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,CONTROLLER:PLAINTEXT"
-      
-      # ★★★★★ 이 설정이 실제 외부 접속을 가능하게 하는 최종 해결책입니다 ★★★★★
-      # 올바른 변수 문법을 사용하여 각 브로커가 자신의 고유한 주소를 동적으로 광고하도록 합니다.
-      - "advertised.listeners=INTERNAL://kafka-${KAFKA_BROKER_ID}.kafka.confluent.svc.cluster.local:9071,EXTERNAL://${CFK_EXTERNAL_LISTENER_HOST}:${CFK_EXTERNAL_LISTENER_PORT}"
-      
+      - "listener.security.protocol.map=INTERNAL:PLAINT-XT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,REPLICATION:PLAINTEXT"
       - "min.insync.replicas=2"
       - "confluent.license.topic.replication.factor=3"
       - "confluent.metrics.reporter.topic.replication.factor=3"
