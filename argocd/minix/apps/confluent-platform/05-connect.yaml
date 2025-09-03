@@ -1,4 +1,4 @@
-# 05-connect.yaml (디버깅용 수정)
+# 05-connect.yaml (수정된 최종본)
 apiVersion: platform.confluent.io/v1beta1
 kind: Connect
 metadata:
@@ -9,17 +9,16 @@ spec:
   image:
     application: confluentinc/cp-server-connect:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
+  
+  # --- ★★★ 이 부분이 문제 해결의 핵심입니다! ★★★ ---
   podTemplate:
+    # nodeSelector를 사용하여 이 파드가 배포될 노드를 강제로 지정합니다.
+    nodeSelector:
+      # Kubernetes의 표준 노드 이름 레이블을 사용합니다.
+      kubernetes.io/hostname: com1
     resources:
       requests: { cpu: "200m", memory: "1Gi" }
       limits: { cpu: "500m", memory: "2Gi" }
-    
-    # --- ★★★ 디버깅을 위한 핵심 수정 ★★★ ---
-    # 파드가 바로 죽지 않고 1시간 동안 살아있도록 명령어를 변경합니다.
-    probe:
-      liveness:
-        exec:
-          command: ["sleep", "3600"]
 
   configOverrides:
     server:
