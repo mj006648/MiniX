@@ -1,3 +1,4 @@
+# 05-connect.yaml (최종 수정본)
 apiVersion: platform.confluent.io/v1beta1
 kind: Connect
 metadata:
@@ -8,6 +9,20 @@ spec:
   image:
     application: confluentinc/cp-server-connect:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
+  podTemplate:
+    resources:
+      requests: { cpu: "200m", memory: "1Gi" }
+      limits: { cpu: "500m", memory: "2Gi" }
+  
+  # --- ★★★ 이 부분이 문제 해결의 핵심입니다! ★★★ ---
+  configOverrides:
+    server:
+      # Connect가 사용하는 3개의 내부 토픽(설정, 오프셋, 상태)의
+      # 복제본 수를 3으로 강제하여 3개의 브로커에 모두 분산되도록 합니다.
+      - "config.storage.replication.factor=3"
+      - "offset.storage.replication.factor=3"
+      - "status.storage.replication.factor=3"
+
   dependencies:
     kafka:
       bootstrapEndpoint: "kafka.confluent.svc.cluster.local:9092"
