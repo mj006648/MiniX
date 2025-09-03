@@ -1,4 +1,4 @@
-# 05-connect.yaml (최종 수정본)
+# 05-connect.yaml (디버깅용 수정)
 apiVersion: platform.confluent.io/v1beta1
 kind: Connect
 metadata:
@@ -13,12 +13,16 @@ spec:
     resources:
       requests: { cpu: "200m", memory: "1Gi" }
       limits: { cpu: "500m", memory: "2Gi" }
-  
-  # --- ★★★ 이 부분이 문제 해결의 핵심입니다! ★★★ ---
+    
+    # --- ★★★ 디버깅을 위한 핵심 수정 ★★★ ---
+    # 파드가 바로 죽지 않고 1시간 동안 살아있도록 명령어를 변경합니다.
+    probe:
+      liveness:
+        exec:
+          command: ["sleep", "3600"]
+
   configOverrides:
     server:
-      # Connect가 사용하는 3개의 내부 토픽(설정, 오프셋, 상태)의
-      # 복제본 수를 3으로 강제하여 3개의 브로커에 모두 분산되도록 합니다.
       - "config.storage.replication.factor=3"
       - "offset.storage.replication.factor=3"
       - "status.storage.replication.factor=3"
