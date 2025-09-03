@@ -211,7 +211,7 @@ applications:
             - "argocd/minix/apps/nessie/values.yaml"
      # Wave 30: Spark Operator (공식 Kubeflow Helm Chart 사용)
     spark-operator:
-      enabled: true
+      enabled: false
       namespace: spark-operator
       syncWave: "14"
       source:
