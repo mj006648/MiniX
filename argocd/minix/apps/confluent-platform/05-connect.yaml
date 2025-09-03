@@ -1,4 +1,3 @@
-# 05-connect.yaml (수정된 최종본)
 apiVersion: platform.confluent.io/v1beta1
 kind: Connect
 metadata:
@@ -9,23 +8,6 @@ spec:
   image:
     application: confluentinc/cp-server-connect:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
-  
-  # --- ★★★ 이 부분이 문제 해결의 핵심입니다! ★★★ ---
-  podTemplate:
-    # nodeSelector를 사용하여 이 파드가 배포될 노드를 강제로 지정합니다.
-    nodeSelector:
-      # Kubernetes의 표준 노드 이름 레이블을 사용합니다.
-      kubernetes.io/hostname: com1
-    resources:
-      requests: { cpu: "200m", memory: "1Gi" }
-      limits: { cpu: "500m", memory: "2Gi" }
-
-  configOverrides:
-    server:
-      - "config.storage.replication.factor=3"
-      - "offset.storage.replication.factor=3"
-      - "status.storage.replication.factor=3"
-
   dependencies:
     kafka:
-      bootstrapEndpoint: "kafka.confluent.svc.cluster.local:9092"
+      bootstrapEndpoint: kafka.confluent.svc.cluster.local:9071
