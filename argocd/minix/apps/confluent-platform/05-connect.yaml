@@ -10,4 +10,4 @@ spec:
     init: confluentinc/confluent-init-container:2.11.2
   dependencies:
     kafka:
-      bootstrapEndpoint: kafka:9092
+      bootstrapEndpoint: "kafka.confluent.svc.cluster.local:9092"
