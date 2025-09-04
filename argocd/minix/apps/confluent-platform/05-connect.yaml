@@ -17,6 +17,19 @@ spec:
           - name: kafka-connect-s3
             owner: confluentinc
             version: "latest"
+  podTemplate:
+    envVars:
+      # AWS SDK가 자동으로 인식하는 표준 환경 변수 이름입니다.
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: s3-credentials # 우리가 만든 Secret의 이름
+            key: access.key.id  # Secret 안에 있는 Access Key의 키 이름
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: s3-credentials # 우리가 만든 Secret의 이름
+            key: secret.access.key # Secret 안에 있는 Secret Key의 키 이름
   dependencies:
     kafka:
       bootstrapEndpoint: kafka.confluent.svc.cluster.local:9071
