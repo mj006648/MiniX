@@ -218,7 +218,7 @@ applications:
         type: helm
         repoURL: https://kubeflow.github.io/spark-operator
         chart: spark-operator
-        targetRevision: "1.4.6"
+        targetRevision: "1.3.2"
         helm:
           releaseName: spark-operator
           valueFiles:
