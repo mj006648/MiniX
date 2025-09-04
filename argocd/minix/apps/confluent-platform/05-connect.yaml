@@ -8,12 +8,15 @@ spec:
   image:
     application: confluentinc/cp-server-connect:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
-  plugins:
-    # Confluent Hub에서 플러그인을 다운로드합니다.
-    confluentHub:
-      - name: kafka-connect-s3
-        owner: confluentinc
-        version: "latest" 
+  build:
+    type: onDemand
+    onDemand:
+      plugins:
+        locationType: confluentHub
+        confluentHub:
+          - name: kafka-connect-s3
+            owner: confluentinc
+            version: "latest"
   dependencies:
     kafka:
       bootstrapEndpoint: kafka.confluent.svc.cluster.local:9071
