@@ -1,22 +1,25 @@
-# ★★★★★ [핵심 수정] apiVersion과 kind를 클러스터에 설치된 CRD에 맞게 변경 ★★★★★
 apiVersion: platform.confluent.io/v1beta1
 kind: Connector
 metadata:
   name: s3-sink-parking-events
   namespace: confluent
 spec:
-  # kafkaClusterRef 대신 kafka.clusterRef 를 사용하는 것이 더 명확한 구문일 수 있습니다.
-  # Operator 버전에 따라 다를 수 있으므로 두 가지를 모두 시도해볼 가치가 있습니다.
-  # 우선은 기존 방식을 유지합니다.
+  # ★★★★★ [핵심 수정 1] 필수 필드 spec.class 추가 ★★★★★
+  class: "io.confluent.connect.s3.S3SinkConnector"
+  
+  # ★★★★★ [핵심 수정 2] spec.maxTasks -> spec.taskMax 로 이름 변경 ★★★★★
+  taskMax: 2
+
   kafkaClusterRef:
     name: kafka
   connectClusterRef:
     name: connect
-  maxTasks: 2
+  
   configs:
-    "connector.class": "io.confluent.connect.s3.S3SinkConnector"
+    # spec.class로 이동했으므로 여기서는 제거해도 되지만, 하위 호환성을 위해 남겨두어도 무방합니다.
+    # "connector.class": "io.confluent.connect.s3.S3SinkConnector" 
     "topics": "parking-entries,parking-exits"
-    "format.class": "io.confluent.connect.s3.format.json.JsonFormat" # 충돌을 피하기 위해 JsonFormat으로 변경
+    "format.class": "io.confluent.connect.s3.format.json.JsonFormat"
     "flush.size": "100"
     "storage.class": "io.confluent.connect.s3.storage.S3Storage"
     "s3.bucket.name": "iceberg"
