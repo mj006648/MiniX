@@ -4,3 +4,6 @@ sparkJobNamespace: "spark-operator"
 # Webhook 활성화
 webhook:
   enable: true
+# [핵심] Helm이 CRD를 설치하지 않도록 하는 설정이 반드시 있어야 합니다.
+crds:
+  install: false
