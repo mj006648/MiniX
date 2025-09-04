@@ -8,7 +8,7 @@ spec:
   image:
     application: confluentinc/cp-server-connect:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
-   build:
+  build:
     type: onDemand
     onDemand:
       plugins:
