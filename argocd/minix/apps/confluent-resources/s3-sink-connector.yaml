@@ -1,0 +1,32 @@
+apiVersion: platform.confluent.io/v1beta1
+kind: Connector
+metadata:
+  name: s3-sink-parking-events
+  namespace: confluent
+spec:
+  class: "io.confluent.connect.s3.S3SinkConnector"
+  taskMax: 2
+  kafkaClusterRef:
+    name: kafka
+  connectClusterRef:
+    name: connect
+  configs:
+    "topics": "parking-entries,parking-exits"
+    "format.class": "io.confluent.connect.s3.format.json.JsonFormat"
+    "flush.size": "100"
+    "storage.class": "io.confluent.connect.s3.storage.S3Storage"
+    "s3.bucket.name": "iceberg"
+    "store.url": "http://rook-ceph-rgw-my-store.rook-ceph.svc:80"
+    # ★★★★★ 이 부분이 핵심입니다 ★★★★★
+    # AWS SDK v2와 호환되는 기본 Provider를 명시적으로 지정합니다.
+    # 이 Provider는 secretRef를 통해 주입된 키를 환경 변수처럼 읽을 수 있습니다.
+    "s3.credentials.provider.class": "software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider"
+    "topics.dir": "landing"
+    "partitioner.class": "io.confluent.connect.storage.partitioner.TimeBasedPartitioner"
+    "path.format": "'year'=YYYY/'month'=MM/'day'=dd"
+    "partition.duration.ms": "86400000"
+    "locale": "ko_KR"
+    "timezone": "Asia/Seoul"
+    "timestamp.extractor": "Record"
+  secretRef:
+    name: s3-credentials
