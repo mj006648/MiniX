@@ -16,7 +16,7 @@ spec:
     "flush.size": "100"
     "storage.class": "io.confluent.connect.s3.storage.S3Storage"
     "s3.bucket.name": "iceberg"
-    "store.url": "http://rook-ceph-rgw-my-store.rook-ceph.svc:80"
+    "store.url": "http://rook-ceph-rgw-my-store.rook-ceph.svc:8080"
     # ★★★★★ 이 부분이 핵심입니다 ★★★★★
     # AWS SDK v2와 호환되는 기본 Provider를 명시적으로 지정합니다.
     # 이 Provider는 secretRef를 통해 주입된 키를 환경 변수처럼 읽을 수 있습니다.
