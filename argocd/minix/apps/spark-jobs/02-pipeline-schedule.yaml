@@ -6,7 +6,7 @@ metadata:
   name: parking-validation-schedule
   namespace: spark-operator
 spec:
-  schedule: "/10 * * * *"
+  schedule: "*/10 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
@@ -49,7 +49,7 @@ metadata:
   name: parking-merge-to-main-schedule
   namespace: spark-operator
 spec:
-  schedule: "/30 * * * *"
+  schedule: "*/30 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
