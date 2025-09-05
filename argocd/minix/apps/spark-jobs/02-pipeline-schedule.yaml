@@ -1,5 +1,5 @@
 # spark-jobs/02-pipeline-schedule.yaml
-# --- 작업 1: 데이터 품질 검증 (매시간 0분에 실행) ---
+# --- 작업 1: 데이터 품질 검증 (매 10분마다 실행) ---
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: ScheduledSparkApplication
 metadata:
@@ -42,7 +42,7 @@ spec:
         configMap:
           name: spark-scripts
 ---
-# --- 작업 2: Main 브랜치 병합 (매시간 10분에 실행) ---
+# --- 작업 2: Main 브랜치 병합 (매 30분마다 실행) ---
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: ScheduledSparkApplication
 metadata:
