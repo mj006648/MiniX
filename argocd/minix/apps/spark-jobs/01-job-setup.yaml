@@ -19,6 +19,7 @@ rules:
     resources:
       - pods
       - services
+      - configmaps
     # [수정] verbs에 '*'를 사용하여 모든 권한을 부여합니다.
     # 이렇게 하면 생성(create), 조회(get), 삭제(delete) 등이 모두 포함되어
     # "cannot deletecollection" 에러가 발생하지 않습니다.
