@@ -18,6 +18,8 @@ rules:
       - pods
       - services
       - configmaps
+      # [추가] PVC 관련 권한을 추가하여 종료 시 발생하는 에러를 방지합니다.
+      - persistentvolumeclaims
     verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -67,7 +69,6 @@ data:
     NESSIE_URI = "http://10.34.48.249:19120/api/v1"
 
     def get_spark_session():
-        # ... (이 함수는 변경 없음, 그대로 유지) ...
         return (
             SparkSession.builder.appName("ParkingDataValidation")
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
@@ -96,15 +97,10 @@ data:
                 return
             raise e
 
-        # 1. 원본 JSON을 raw_payload 컬럼에 저장
         df_with_payload = raw_df.withColumn("raw_payload", to_json(struct([col(c) for c in raw_df.columns])))
-
-        # 2. 데이터 품질 검증
         window_spec = Window.partitionBy("eventId").orderBy(col("timestamp").desc())
         df_with_row_num = df_with_payload.withColumn("row_num", row_number().over(window_spec))
 
-        # [수정] 원본 DataFrame(df_with_row_num)을 기준으로 validation_error를 먼저 계산합니다.
-        # 이렇게 하면 'durationInSeconds'가 없어도 에러가 발생하지 않습니다.
         validated_df = df_with_row_num.withColumn(
             "validation_error",
             when(col("eventId").isNull(), "Primary key is null")
@@ -116,11 +112,9 @@ data:
             .otherwise(lit(None))
         )
 
-        # 3. 신뢰/불신 데이터 분리
         trusted_df = validated_df.filter(col("validation_error").isNull())
         untrusted_df = validated_df.filter(col("validation_error").isNotNull())
 
-        # 4. 각 테이블의 최종 스키마에 맞춰 컬럼 선택 및 저장
         if not trusted_df.rdd.isEmpty():
             if event_type == "ENTRY":
                 final_trusted_df = trusted_df.selectExpr(
