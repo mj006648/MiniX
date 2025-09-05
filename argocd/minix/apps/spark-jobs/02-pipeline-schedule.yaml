@@ -1,5 +1,4 @@
 # spark-jobs/02-pipeline-schedule.yaml
-# --- 작업 1: 데이터 품질 검증 (매 10분마다 실행) ---
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: ScheduledSparkApplication
 metadata:
@@ -42,14 +41,13 @@ spec:
         configMap:
           name: spark-scripts
 ---
-# --- 작업 2: Main 브랜치 병합 (매 30분마다 실행) ---
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: ScheduledSparkApplication
 metadata:
   name: parking-merge-to-main-schedule
   namespace: spark-operator
 spec:
-  schedule: "*/30 * * * *"
+  schedule: "30 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
@@ -67,7 +65,6 @@ spec:
         - name: scripts-volume
           mountPath: /mnt/scripts
     executor:
-      # [수정] Spark Operator 유효성 검사 규칙에 따라 instances는 1 이상이어야 합니다.
       instances: 1
       cores: 1
       memory: "512m"

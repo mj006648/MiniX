@@ -1,14 +1,12 @@
 # spark-jobs/01-job-setup.yaml
 
 # --- 1. RBAC(역할 기반 접근 제어) 설정 ---
-# Spark 드라이버 Pod가 사용할 "신분증"인 서비스 계정
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: spark-sa
   namespace: spark-operator
 ---
-# "익스큐터 Pod와 서비스를 생성/삭제할 수 있는 권한 목록"인 역할
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -20,12 +18,8 @@ rules:
       - pods
       - services
       - configmaps
-    # [수정] verbs에 '*'를 사용하여 모든 권한을 부여합니다.
-    # 이렇게 하면 생성(create), 조회(get), 삭제(delete) 등이 모두 포함되어
-    # "cannot deletecollection" 에러가 발생하지 않습니다.
     verbs: ["*"]
 ---
-# 위에서 만든 "신분증(spark-sa)"과 "권한(spark-driver-role)"을 연결
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -41,7 +35,6 @@ subjects:
     namespace: spark-operator
 ---
 # --- 2. S3 접근 정보 Secret ---
-# Spark 코드가 S3(Rook-Ceph) 버킷에 안전하게 접근할 수 있도록 접속 정보를 Secret(비밀 금고)에 저장
 apiVersion: v1
 kind: Secret
 metadata:
@@ -49,33 +42,28 @@ metadata:
   namespace: spark-operator
 type: Opaque
 stringData:
-  # 제공된 Rook-Ceph 버킷 정보
   S3_ENDPOINT: "http://rook-ceph-rgw-my-store.rook-ceph.svc:8080"
   S3_ACCESS_KEY: "LDCMT684CGVXV6P4E0HA"
   S3_SECRET_KEY: "E9dfgciqiyWMD0ukBXT638pY5CggcP7Ble7eBdeu"
 ---
 # --- 3. PySpark 스크립트가 담긴 ConfigMap ---
-# 실행할 두 개의 PySpark 스크립트를 쿠버네티스 ConfigMap에 "작업 설명서"처럼 저장합니다.
-# 이렇게 하면 Docker 이미지를 다시 빌드하지 않고도 스크립트만 수정하고 재배포할 수 있어 편리합니다.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py
+  # 첫 번째 스크립트: data_validator.py (새로운 스키마에 맞춰 전면 수정)
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import col, lit, when, row_number
+    from pyspark.sql.functions import col, lit, when, row_number, to_json, struct, current_timestamp
     from pyspark.sql.window import Window
     from pyspark.sql.utils import AnalysisException
 
-    # Secret을 통해 주입될 환경 변수
     S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
     S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
     S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
-    # 제공된 Nessie API Loadbalancer 주소
     NESSIE_URI = "http://10.34.48.249:19120/api/v1"
 
     def get_spark_session():
@@ -84,7 +72,7 @@ data:
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
-            .config("spark.sql.catalog.nessie.ref", "dev") # [핵심] 모든 작업은 'dev' 브랜치에서 수행
+            .config("spark.sql.catalog.nessie.ref", "dev")
             .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
             .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
@@ -95,32 +83,10 @@ data:
             .getOrCreate()
         )
 
-    def validate_data(df, primary_key="eventId"):
-        """데이터 품질 검증(Null, 중복, 범위)을 수행하고 데이터를 분리합니다."""
-        window_spec = Window.partitionBy(primary_key).orderBy(col("timestamp").desc())
-        df_with_row_num = df.withColumn("row_num", row_number().over(window_spec))
-        
-        # [수정] eventType에 따라 검증 규칙을 다르게 적용하여 'FIELD_NOT_FOUND' 에러를 해결합니다.
-        validated_df = df_with_row_num.withColumn(
-            "untrusted_reason",
-            when(col(primary_key).isNull(), "Primary key is null")
-            .when(col("row_num") > 1, "Duplicate primary key")
-            # 'durationInSeconds' 검증은 'eventType'이 'EXIT'일 때만 수행합니다.
-            .when(
-                (col("eventType") == "EXIT") & (col("eventDetails.durationInSeconds") < 0),
-                "Negative duration"
-            )
-            .otherwise(lit(None))
-        )
-        
-        trusted_df = validated_df.filter(col("untrusted_reason").isNull()).drop("row_num", "untrusted_reason")
-        untrusted_df = validated_df.filter(col("untrusted_reason").isNotNull()).drop("row_num")
-        return trusted_df, untrusted_df
-
-    def process_data(spark, data_path, primary_key, trusted_table, untrusted_table):
+    def process_data(spark, data_path, event_type):
         try:
-            df = spark.read.json(data_path)
-            if df.rdd.isEmpty():
+            raw_df = spark.read.json(data_path)
+            if raw_df.rdd.isEmpty():
                 print(f"No new data found in {data_path}. Skipping.")
                 return
         except AnalysisException as e:
@@ -128,13 +94,68 @@ data:
                 print(f"Path {data_path} does not exist. Skipping.")
                 return
             raise e
-        trusted_df, untrusted_df = validate_data(df, primary_key)
+
+        # [수정] 1. 원본 JSON을 raw_payload 컬럼에 저장
+        df_with_payload = raw_df.withColumn("raw_payload", to_json(struct(raw_df.columns)))
+
+        # [수정] 2. 중첩된 eventDetails 구조를 평탄화 (새로운 스키마에 맞춤)
+        if event_type == "ENTRY":
+            flat_df = df_with_payload.select(
+                "eventId", "timestamp", "carId", "raw_payload",
+                col("eventDetails.imagePath").alias("imagePath"),
+                col("eventDetails.assignedSlotId").alias("slotId"),
+                col("eventDetails.slotCoordinates").alias("slotCoordinates")
+            )
+            trusted_table = "nessie.parking_data.trusted_entry_events"
+            untrusted_table = "nessie.parking_data.untrusted_entry_events"
+        elif event_type == "EXIT":
+            flat_df = df_with_payload.select(
+                "eventId", "timestamp", "carId", "raw_payload",
+                col("eventDetails.imagePath").alias("imagePath"),
+                col("eventDetails.assignedSlotId").alias("slotId"),
+                col("eventDetails.entryTimestamp").alias("entryTimestamp"),
+                col("eventDetails.durationInSeconds").alias("durationInSeconds"),
+                col("eventDetails.entryEventId").alias("entryEventId")
+            )
+            trusted_table = "nessie.parking_data.trusted_exit_events"
+            untrusted_table = "nessie.parking_data.untrusted_exit_events"
+        else:
+            return
+
+        # 3. 데이터 품질 검증
+        window_spec = Window.partitionBy("eventId").orderBy(col("timestamp").desc())
+        df_with_row_num = flat_df.withColumn("row_num", row_number().over(window_spec))
+        
+        validated_df = df_with_row_num.withColumn(
+            "validation_error", # 새 스키마의 컬럼 이름으로 변경
+            when(col("eventId").isNull(), "Primary key is null")
+            .when(col("row_num") > 1, "Duplicate primary key")
+            .when((lit(event_type) == "EXIT") & (col("durationInSeconds") < 0), "Negative duration")
+            .otherwise(lit(None))
+        )
+
+        # 4. 신뢰/불신 데이터 분리
+        trusted_df = validated_df.filter(col("validation_error").isNull())
+        untrusted_df = validated_df.filter(col("validation_error").isNotNull())
+
+        # [수정] 5. 각 테이블의 최종 스키마에 맞춰 컬럼 선택 및 저장
         if not trusted_df.rdd.isEmpty():
-            trusted_df.writeTo(trusted_table).append()
-            print(f"Appended {trusted_df.count()} records to {trusted_table}")
+            final_trusted_df = trusted_df.select(
+                "eventId", "timestamp", "carId", "imagePath", "slotId", 
+                *(["slotCoordinates"] if event_type == "ENTRY" else ["entryTimestamp", "durationInSeconds", "entryEventId"])
+            )
+            final_trusted_df.writeTo(trusted_table).append()
+            print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
+
         if not untrusted_df.rdd.isEmpty():
-            untrusted_df.writeTo(untrusted_table).append()
-            print(f"Appended {untrusted_df.count()} records to {untrusted_table}")
+            final_untrusted_df = untrusted_df.withColumn("processing_timestamp", current_timestamp())
+            final_untrusted_df = final_untrusted_df.select(
+                "eventId", "timestamp", "carId", "imagePath", "slotId",
+                *(["slotCoordinates"] if event_type == "ENTRY" else ["entryTimestamp", "durationInSeconds", "entryEventId"]),
+                "raw_payload", "validation_error", "processing_timestamp"
+            )
+            final_untrusted_df.writeTo(untrusted_table).append()
+            print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
 
     def main():
         spark = get_spark_session()
@@ -143,22 +164,23 @@ data:
         yesterday = today - timedelta(days=1)
         date_paths = [ f"year={d.year}/month={d.month:02d}/day={d.day:02d}" for d in [yesterday, today] ]
         for date_path in date_paths:
+            # 입차 데이터 처리
             entry_path = f"s3a://iceberg/landing/parking-entries/{date_path}/*"
-            process_data(spark, entry_path, "eventId", "nessie.parking_data.trusted_entry_events", "nessie.parking_data.untrusted_entry_events")
+            process_data(spark, entry_path, "ENTRY")
+            
+            # 출차 데이터 처리
             exit_path = f"s3a://iceberg/landing/parking-exits/{date_path}/*"
-            process_data(spark, exit_path, "eventId", "nessie.parking_data.trusted_exit_events", "nessie.parking_data.untrusted_exit_events")
+            process_data(spark, exit_path, "EXIT")
         spark.stop()
 
     if __name__ == "__main__":
         main()
 
-  # 두 번째 스크립트: merge_to_main.py
+  # 두 번째 스크립트: merge_to_main.py (변경 없음)
   merge_to_main.py: |
     import os
     from pyspark.sql import SparkSession
-
     NESSIE_URI = "http://10.34.48.249:19120/api/v1"
-
     def main():
         spark = (
             SparkSession.builder.appName("NessieMergeToMain")
@@ -174,6 +196,5 @@ data:
         except Exception as e:
             print(f"An error occurred during merge: {e}")
         spark.stop()
-
     if __name__ == "__main__":
         main()
