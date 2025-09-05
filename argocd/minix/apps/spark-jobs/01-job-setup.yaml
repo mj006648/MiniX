@@ -53,7 +53,7 @@ metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (새로운 스키마에 맞춰 전면 수정)
+  # 첫 번째 스크립트: data_validator.py (최종 수정본)
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
@@ -67,6 +67,7 @@ data:
     NESSIE_URI = "http://10.34.48.249:19120/api/v1"
 
     def get_spark_session():
+        # ... (이 함수는 변경 없음, 그대로 유지) ...
         return (
             SparkSession.builder.appName("ParkingDataValidation")
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
@@ -95,67 +96,81 @@ data:
                 return
             raise e
 
-        # [수정] 1. 원본 JSON을 raw_payload 컬럼에 저장
-        df_with_payload = raw_df.withColumn("raw_payload", to_json(struct(raw_df.columns)))
+        # 1. 원본 JSON을 raw_payload 컬럼에 저장
+        df_with_payload = raw_df.withColumn("raw_payload", to_json(struct([col(c) for c in raw_df.columns])))
 
-        # [수정] 2. 중첩된 eventDetails 구조를 평탄화 (새로운 스키마에 맞춤)
-        if event_type == "ENTRY":
-            flat_df = df_with_payload.select(
-                "eventId", "timestamp", "carId", "raw_payload",
-                col("eventDetails.imagePath").alias("imagePath"),
-                col("eventDetails.assignedSlotId").alias("slotId"),
-                col("eventDetails.slotCoordinates").alias("slotCoordinates")
-            )
-            trusted_table = "nessie.parking_data.trusted_entry_events"
-            untrusted_table = "nessie.parking_data.untrusted_entry_events"
-        elif event_type == "EXIT":
-            flat_df = df_with_payload.select(
-                "eventId", "timestamp", "carId", "raw_payload",
-                col("eventDetails.imagePath").alias("imagePath"),
-                col("eventDetails.assignedSlotId").alias("slotId"),
-                col("eventDetails.entryTimestamp").alias("entryTimestamp"),
-                col("eventDetails.durationInSeconds").alias("durationInSeconds"),
-                col("eventDetails.entryEventId").alias("entryEventId")
-            )
-            trusted_table = "nessie.parking_data.trusted_exit_events"
-            untrusted_table = "nessie.parking_data.untrusted_exit_events"
-        else:
-            return
-
-        # 3. 데이터 품질 검증
+        # 2. 데이터 품질 검증
         window_spec = Window.partitionBy("eventId").orderBy(col("timestamp").desc())
-        df_with_row_num = flat_df.withColumn("row_num", row_number().over(window_spec))
-        
+        df_with_row_num = df_with_payload.withColumn("row_num", row_number().over(window_spec))
+
+        # [수정] 원본 DataFrame(df_with_row_num)을 기준으로 validation_error를 먼저 계산합니다.
+        # 이렇게 하면 'durationInSeconds'가 없어도 에러가 발생하지 않습니다.
         validated_df = df_with_row_num.withColumn(
-            "validation_error", # 새 스키마의 컬럼 이름으로 변경
+            "validation_error",
             when(col("eventId").isNull(), "Primary key is null")
             .when(col("row_num") > 1, "Duplicate primary key")
-            .when((lit(event_type) == "EXIT") & (col("durationInSeconds") < 0), "Negative duration")
+            .when(
+                (col("eventType") == "EXIT") & (col("eventDetails.durationInSeconds") < 0),
+                "Negative duration"
+            )
             .otherwise(lit(None))
         )
 
-        # 4. 신뢰/불신 데이터 분리
+        # 3. 신뢰/불신 데이터 분리
         trusted_df = validated_df.filter(col("validation_error").isNull())
         untrusted_df = validated_df.filter(col("validation_error").isNotNull())
 
-        # [수정] 5. 각 테이블의 최종 스키마에 맞춰 컬럼 선택 및 저장
+        # 4. 각 테이블의 최종 스키마에 맞춰 컬럼 선택 및 저장
         if not trusted_df.rdd.isEmpty():
-            final_trusted_df = trusted_df.select(
-                "eventId", "timestamp", "carId", "imagePath", "slotId", 
-                *(["slotCoordinates"] if event_type == "ENTRY" else ["entryTimestamp", "durationInSeconds", "entryEventId"])
-            )
-            final_trusted_df.writeTo(trusted_table).append()
-            print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
+            if event_type == "ENTRY":
+                final_trusted_df = trusted_df.selectExpr(
+                    "eventId", "timestamp", "carId",
+                    "eventDetails.imagePath as imagePath",
+                    "eventDetails.assignedSlotId as slotId",
+                    "eventDetails.slotCoordinates as slotCoordinates"
+                )
+                trusted_table = "nessie.parking_data.trusted_entry_events"
+                final_trusted_df.writeTo(trusted_table).append()
+                print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
+            elif event_type == "EXIT":
+                final_trusted_df = trusted_df.selectExpr(
+                    "eventId", "timestamp", "carId",
+                    "eventDetails.imagePath as imagePath",
+                    "eventDetails.assignedSlotId as slotId",
+                    "eventDetails.entryTimestamp as entryTimestamp",
+                    "eventDetails.durationInSeconds as durationInSeconds",
+                    "eventDetails.entryEventId as entryEventId"
+                )
+                trusted_table = "nessie.parking_data.trusted_exit_events"
+                final_trusted_df.writeTo(trusted_table).append()
+                print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
 
         if not untrusted_df.rdd.isEmpty():
             final_untrusted_df = untrusted_df.withColumn("processing_timestamp", current_timestamp())
-            final_untrusted_df = final_untrusted_df.select(
-                "eventId", "timestamp", "carId", "imagePath", "slotId",
-                *(["slotCoordinates"] if event_type == "ENTRY" else ["entryTimestamp", "durationInSeconds", "entryEventId"]),
-                "raw_payload", "validation_error", "processing_timestamp"
-            )
-            final_untrusted_df.writeTo(untrusted_table).append()
-            print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
+            if event_type == "ENTRY":
+                final_untrusted_df = final_untrusted_df.selectExpr(
+                    "eventId", "timestamp", "carId",
+                    "eventDetails.imagePath as imagePath",
+                    "eventDetails.assignedSlotId as slotId",
+                    "eventDetails.slotCoordinates as slotCoordinates",
+                    "raw_payload", "validation_error", "processing_timestamp"
+                )
+                untrusted_table = "nessie.parking_data.untrusted_entry_events"
+                final_untrusted_df.writeTo(untrusted_table).append()
+                print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
+            elif event_type == "EXIT":
+                final_untrusted_df = final_untrusted_df.selectExpr(
+                    "eventId", "timestamp", "carId",
+                    "eventDetails.imagePath as imagePath",
+                    "eventDetails.assignedSlotId as slotId",
+                    "eventDetails.entryTimestamp as entryTimestamp",
+                    "eventDetails.durationInSeconds as durationInSeconds",
+                    "eventDetails.entryEventId as entryEventId",
+                    "raw_payload", "validation_error", "processing_timestamp"
+                )
+                untrusted_table = "nessie.parking_data.untrusted_exit_events"
+                final_untrusted_df.writeTo(untrusted_table).append()
+                print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
 
     def main():
         spark = get_spark_session()
@@ -164,11 +179,8 @@ data:
         yesterday = today - timedelta(days=1)
         date_paths = [ f"year={d.year}/month={d.month:02d}/day={d.day:02d}" for d in [yesterday, today] ]
         for date_path in date_paths:
-            # 입차 데이터 처리
             entry_path = f"s3a://iceberg/landing/parking-entries/{date_path}/*"
             process_data(spark, entry_path, "ENTRY")
-            
-            # 출차 데이터 처리
             exit_path = f"s3a://iceberg/landing/parking-exits/{date_path}/*"
             process_data(spark, exit_path, "EXIT")
         spark.stop()
