@@ -95,7 +95,7 @@ applications:
         - CreateNamespace=true
     
     spark-jobs:
-      enabled: true
+      enabled: false
       namespace: spark-operator
       syncWave: "15"
       source:
