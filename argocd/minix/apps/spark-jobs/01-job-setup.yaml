@@ -1,12 +1,14 @@
 # spark-jobs/01-job-setup.yaml
 
 # --- 1. RBAC(역할 기반 접근 제어) 설정 ---
+# Spark 드라이버 Pod가 사용할 "신분증"인 서비스 계정
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: spark-sa
   namespace: spark-operator
 ---
+# "익스큐터 Pod, 서비스, ConfigMap 등을 생성/삭제할 수 있는 권한 목록"인 역할
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -18,9 +20,12 @@ rules:
       - pods
       - services
       - configmaps
+      # [수정] PVC 관련 권한을 추가하여 종료 시 발생하는 에러를 방지합니다.
       - persistentvolumeclaims
+    # [수정] verbs에 '*'를 사용하여 모든 권한을 부여합니다.
     verbs: ["*"]
 ---
+# 위에서 만든 "신분증(spark-sa)"과 "권한(spark-driver-role)"을 연결
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -36,6 +41,7 @@ subjects:
     namespace: spark-operator
 ---
 # --- 2. S3 접근 정보 Secret ---
+# Spark 코드가 S3(Rook-Ceph) 버킷에 안전하게 접근할 수 있도록 접속 정보를 Secret(비밀 금고)에 저장
 apiVersion: v1
 kind: Secret
 metadata:
@@ -43,18 +49,21 @@ metadata:
   namespace: spark-operator
 type: Opaque
 stringData:
+  # 제공된 Rook-Ceph 버킷 정보
   S3_ENDPOINT: "http://rook-ceph-rgw-my-store.rook-ceph.svc:8080"
   S3_ACCESS_KEY: "LDCMT684CGVXV6P4E0HA"
   S3_SECRET_KEY: "E9dfgciqiyWMD0ukBXT638pY5CggcP7Ble7eBdeu"
 ---
 # --- 3. PySpark 스크립트가 담긴 ConfigMap ---
+# 실행할 두 개의 PySpark 스크립트를 쿠버네티스 ConfigMap에 "작업 설명서"처럼 저장합니다.
+# 이렇게 하면 Docker 이미지를 다시 빌드하지 않고도 스크립트만 수정하고 재배포할 수 있어 편리합니다.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py
+  # 첫 번째 스크립트: data_validator.py (모든 문제 수정된 최종본)
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
@@ -74,7 +83,7 @@ data:
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
             .config("spark.sql.catalog.nessie.ref", "dev")
-            .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
+            .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse") # [수정] warehouse 경로 통일
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
             .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
             .config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
@@ -146,8 +155,10 @@ data:
         yesterday = today - timedelta(days=1)
         date_paths = [ f"year={d.year}/month={d.month:02d}/day={d.day:02d}" for d in [yesterday, today] ]
         for date_path in date_paths:
+            # [수정] 버킷 이름을 'accumulation'에서 'iceberg'로 변경합니다.
             entry_path = f"s3a://iceberg/landing/parking-entries/{date_path}/*"
             process_data(spark, entry_path, "ENTRY")
+            # [수정] 버킷 이름을 'accumulation'에서 'iceberg'로 변경합니다.
             exit_path = f"s3a://iceberg/landing/parking-exits/{date_path}/*"
             process_data(spark, exit_path, "EXIT")
         spark.stop()
@@ -170,6 +181,7 @@ data:
         )
         print("Merging trusted tables from staging@dev to prod@main...")
         try:
+            # [수정] MERGE INTO 구문을 사용하여 staging의 trusted 데이터만 prod로 병합합니다.
             spark.sql("""
             MERGE INTO nessie.parking_data_prod.trusted_entry_events t
             USING (SELECT * FROM nessie.parking_data_staging.trusted_entry_events AT BRANCH dev) s

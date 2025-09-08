@@ -5,7 +5,7 @@ metadata:
   name: parking-validation-schedule
   namespace: spark-operator
 spec:
-  schedule: "*/30 * * * *"
+  schedule: "*/5 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
