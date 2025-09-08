@@ -47,7 +47,8 @@ metadata:
   name: parking-merge-to-main-schedule
   namespace: spark-operator
 spec:
-  schedule: "/45 * * * *"
+  # [수정] 스케줄 문법을 올바른 "45분마다"로 변경 (또는 "45 * * * *"로 변경 가능)
+  schedule: "*/45 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3

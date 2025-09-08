@@ -1,83 +1,52 @@
-# spark-jobs/02-pipeline-schedule.yaml
-# --- 작업 1: 데이터 품질 검증 (매시간 0분에 실행) ---
-apiVersion: sparkoperator.k8s.io/v1beta2
-kind: ScheduledSparkApplication
+# spark-jobs/01-job-setup.yaml
+
+# --- 1. RBAC(역할 기반 접근 제어) 설정 ---
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  name: parking-validation-schedule
+  name: spark-sa
   namespace: spark-operator
-spec:
-  schedule: "0 * * * *"
-  concurrencyPolicy: Forbid
-  successfulRunHistoryLimit: 3
-  failedRunHistoryLimit: 3
-  template:
-    type: Python
-    mode: cluster
-    image: "ich6648/spark-iceberg-nessie-kafka:9.0"
-    imagePullPolicy: Always
-    mainApplicationFile: "local:///mnt/scripts/data_validator.py"
-    sparkVersion: "3.5.0"
-    driver:
-      serviceAccount: spark-sa
-      cores: 1
-      memory: "1g"
-      envFrom:
-        - secretRef:
-            name: s3-creds-for-spark
-      volumeMounts:
-        - name: scripts-volume
-          mountPath: /mnt/scripts
-    executor:
-      instances: 2
-      cores: 1
-      memory: "1g"
-      envFrom:
-        - secretRef:
-            name: s3-creds-for-spark
-      volumeMounts:
-        - name: scripts-volume
-          mountPath: /mnt/scripts
-    volumes:
-      - name: scripts-volume
-        configMap:
-          name: spark-scripts
 ---
-# --- 작업 2: Main 브랜치 병합 (매시간 10분에 실행) ---
-apiVersion: sparkoperator.k8s.io/v1beta2
-kind: ScheduledSparkApplication
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
 metadata:
-  name: parking-merge-to-main-schedule
+  name: spark-driver-role
   namespace: spark-operator
-spec:
-  schedule: "10 * * * *"
-  concurrencyPolicy: Forbid
-  successfulRunHistoryLimit: 3
-  failedRunHistoryLimit: 3
-  template:
-    type: Python
-    mode: cluster
-    image: "ich6648/spark-iceberg-nessie-kafka:9.0"
-    mainApplicationFile: "local:///mnt/scripts/merge_to_main.py"
-    sparkVersion: "3.5.0"
-    driver:
-      serviceAccount: spark-sa
-      cores: 1
-      memory: "512m"
-      volumeMounts:
-        - name: scripts-volume
-          mountPath: /mnt/scripts
-    executor:
-      # [수정] Spark Operator 유효성 검사 규칙에 따라 instances는 1 이상이어야 합니다.
-      instances: 1
-      cores: 1
-      memory: "512m"
-      volumeMounts:
-        - name: scripts-volume
-          mountPath: /mnt/scripts
-    volumes:
-      - name: scripts-volume
-        configMap:
-          name: spark-scripts
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - configmaps
+      - persistentvolumeclaims
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spark-driver-binding
+  namespace: spark-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: spark-driver-role
+subjects:
+  - kind: ServiceAccount
+    name: spark-sa
+    namespace: spark-operator
+---
+# --- 2. S3 접근 정보 Secret ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: s3-creds-for-spark
+  namespace: spark-operator
+type: Opaque
+stringData:
+  S3_ENDPOINT: "http://rook-ceph-rgw-my-store.rook-ceph.svc:8080"
+  S3_ACCESS_KEY: "LDCMT684CGVXV6P4E0HA"
+  S3_SECRET_KEY: "E9dfgciqiyWMD0ukBXT638pY5CggcP7Ble7eBdeu"
+---
 # --- 3. PySpark 스크립트가 담긴 ConfigMap ---
 apiVersion: v1
 kind: ConfigMap
@@ -85,7 +54,7 @@ metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (staging 네임스페이스 사용 버전)
+  # 첫 번째 스크립트: data_validator.py
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
@@ -104,7 +73,7 @@ data:
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
-            .config("spark.sql.catalog.nessie.ref", "dev") # 모든 작업은 'dev' 브랜치에서 수행
+            .config("spark.sql.catalog.nessie.ref", "dev")
             .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
             .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
@@ -147,7 +116,6 @@ data:
 
         if not trusted_df.rdd.isEmpty():
             if event_type == "ENTRY":
-                # [수정] Staging 네임스페이스의 trusted 테이블을 대상으로 함
                 final_trusted_df = trusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates")
                 trusted_table = "nessie.parking_data_staging.trusted_entry_events"
                 final_trusted_df.writeTo(trusted_table).append()
@@ -161,7 +129,6 @@ data:
         if not untrusted_df.rdd.isEmpty():
             final_untrusted_df = untrusted_df.withColumn("processing_timestamp", current_timestamp())
             if event_type == "ENTRY":
-                # [수정] Staging 네임스페이스의 untrusted 테이블을 대상으로 함
                 final_untrusted_df = final_untrusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates", "raw_payload", "validation_error", "processing_timestamp")
                 untrusted_table = "nessie.parking_data_staging.untrusted_entry_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
@@ -203,7 +170,6 @@ data:
         )
         print("Merging trusted tables from staging@dev to prod@main...")
         try:
-            # [수정] MERGE INTO 구문을 사용하여 staging의 trusted 데이터만 prod로 병합합니다.
             spark.sql("""
             MERGE INTO nessie.parking_data_prod.trusted_entry_events t
             USING (SELECT * FROM nessie.parking_data_staging.trusted_entry_events AT BRANCH dev) s
