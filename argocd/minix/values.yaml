@@ -94,12 +94,20 @@ applications:
       syncOptions:
         - CreateNamespace=true
     
-    spark-jobs:
+    spark-job-configs: # <-- 앱 이름 확인
+      enabled: true
+      namespace: spark-operator
+      syncWave: "14"
+      source:
+        path: "argocd/minix/apps/job-configs" # <-- 경로 확인
+
+    # Wave 15: 스케줄러 애플리케이션 배포
+    spark-job-schedules: # <-- 앱 이름 확인
       enabled: true
       namespace: spark-operator
       syncWave: "15"
       source:
-        path: "argocd/minix/apps/spark-jobs" 
+        path: "argocd/minix/apps/job-schedules" 
     # Helm 차트로 관리되는 애플리케이션
     metallb:
         enabled: true
@@ -213,7 +221,7 @@ applications:
     spark-operator:
       enabled: true
       namespace: spark-operator
-      syncWave: "14"
+      syncWave: "16"
       source:
         type: helm
         repoURL: https://kubeflow.github.io/spark-operator
