@@ -19,7 +19,14 @@ rules:
       - services
       - configmaps
       - persistentvolumeclaims
-    verbs: ["*"]
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - delete
+      - deletecollection   # ← 추가
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
