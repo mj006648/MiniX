@@ -1,69 +1,91 @@
-# spark-jobs/01-job-setup.yaml
-
-# --- 1. RBAC(역할 기반 접근 제어) 설정 ---
-# Spark 드라이버 Pod가 사용할 "신분증"인 서비스 계정
-apiVersion: v1
-kind: ServiceAccount
+# spark-jobs/02-pipeline-schedule.yaml
+# --- 작업 1: 데이터 품질 검증 (매시간 0분에 실행) ---
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: ScheduledSparkApplication
 metadata:
-  name: spark-sa
+  name: parking-validation-schedule
   namespace: spark-operator
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulRunHistoryLimit: 3
+  failedRunHistoryLimit: 3
+  template:
+    type: Python
+    mode: cluster
+    image: "ich6648/spark-iceberg-nessie-kafka:9.0"
+    imagePullPolicy: Always
+    mainApplicationFile: "local:///mnt/scripts/data_validator.py"
+    sparkVersion: "3.5.0"
+    driver:
+      serviceAccount: spark-sa
+      cores: 1
+      memory: "1g"
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-spark
+      volumeMounts:
+        - name: scripts-volume
+          mountPath: /mnt/scripts
+    executor:
+      instances: 2
+      cores: 1
+      memory: "1g"
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-spark
+      volumeMounts:
+        - name: scripts-volume
+          mountPath: /mnt/scripts
+    volumes:
+      - name: scripts-volume
+        configMap:
+          name: spark-scripts
 ---
-# "익스큐터 Pod, 서비스, ConfigMap 등을 생성/삭제할 수 있는 권한 목록"인 역할
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+# --- 작업 2: Main 브랜치 병합 (매시간 10분에 실행) ---
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: ScheduledSparkApplication
 metadata:
-  name: spark-driver-role
+  name: parking-merge-to-main-schedule
   namespace: spark-operator
-rules:
-  - apiGroups: [""]
-    resources:
-      - pods
-      - services
-      - configmaps
-      # [수정] PVC 관련 권한을 추가하여 종료 시 발생하는 에러를 방지합니다.
-      - persistentvolumeclaims
-    # [수정] verbs에 '*'를 사용하여 모든 권한을 부여합니다.
-    verbs: ["*"]
----
-# 위에서 만든 "신분증(spark-sa)"과 "권한(spark-driver-role)"을 연결
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: spark-driver-binding
-  namespace: spark-operator
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: spark-driver-role
-subjects:
-  - kind: ServiceAccount
-    name: spark-sa
-    namespace: spark-operator
----
-# --- 2. S3 접근 정보 Secret ---
-# Spark 코드가 S3(Rook-Ceph) 버킷에 안전하게 접근할 수 있도록 접속 정보를 Secret(비밀 금고)에 저장
-apiVersion: v1
-kind: Secret
-metadata:
-  name: s3-creds-for-spark
-  namespace: spark-operator
-type: Opaque
-stringData:
-  # 제공된 Rook-Ceph 버킷 정보
-  S3_ENDPOINT: "http://rook-ceph-rgw-my-store.rook-ceph.svc:8080"
-  S3_ACCESS_KEY: "LDCMT684CGVXV6P4E0HA"
-  S3_SECRET_KEY: "E9dfgciqiyWMD0ukBXT638pY5CggcP7Ble7eBdeu"
----
+spec:
+  schedule: "10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulRunHistoryLimit: 3
+  failedRunHistoryLimit: 3
+  template:
+    type: Python
+    mode: cluster
+    image: "ich6648/spark-iceberg-nessie-kafka:9.0"
+    mainApplicationFile: "local:///mnt/scripts/merge_to_main.py"
+    sparkVersion: "3.5.0"
+    driver:
+      serviceAccount: spark-sa
+      cores: 1
+      memory: "512m"
+      volumeMounts:
+        - name: scripts-volume
+          mountPath: /mnt/scripts
+    executor:
+      # [수정] Spark Operator 유효성 검사 규칙에 따라 instances는 1 이상이어야 합니다.
+      instances: 1
+      cores: 1
+      memory: "512m"
+      volumeMounts:
+        - name: scripts-volume
+          mountPath: /mnt/scripts
+    volumes:
+      - name: scripts-volume
+        configMap:
+          name: spark-scripts
 # --- 3. PySpark 스크립트가 담긴 ConfigMap ---
-# 실행할 두 개의 PySpark 스크립트를 쿠버네티스 ConfigMap에 "작업 설명서"처럼 저장합니다.
-# 이렇게 하면 Docker 이미지를 다시 빌드하지 않고도 스크립트만 수정하고 재배포할 수 있어 편리합니다.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (최종 수정본)
+  # 첫 번째 스크립트: data_validator.py (staging 네임스페이스 사용 버전)
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
@@ -82,7 +104,7 @@ data:
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
-            .config("spark.sql.catalog.nessie.ref", "dev")
+            .config("spark.sql.catalog.nessie.ref", "dev") # 모든 작업은 'dev' 브랜치에서 수행
             .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
             .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
@@ -109,8 +131,6 @@ data:
         window_spec = Window.partitionBy("eventId").orderBy(col("timestamp").desc())
         df_with_row_num = df_with_payload.withColumn("row_num", row_number().over(window_spec))
 
-        # [수정] 원본 DataFrame(df_with_row_num)을 기준으로 validation_error를 먼저 계산합니다.
-        # 이렇게 하면 'durationInSeconds'가 없어도 에러가 발생하지 않습니다.
         validated_df = df_with_row_num.withColumn(
             "validation_error",
             when(col("eventId").isNull(), "Primary key is null")
@@ -127,52 +147,28 @@ data:
 
         if not trusted_df.rdd.isEmpty():
             if event_type == "ENTRY":
-                final_trusted_df = trusted_df.selectExpr(
-                    "eventId", "timestamp", "carId",
-                    "eventDetails.imagePath as imagePath",
-                    "eventDetails.assignedSlotId as slotId",
-                    "eventDetails.slotCoordinates as slotCoordinates"
-                )
-                trusted_table = "nessie.parking_data.trusted_entry_events"
+                # [수정] Staging 네임스페이스의 trusted 테이블을 대상으로 함
+                final_trusted_df = trusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates")
+                trusted_table = "nessie.parking_data_staging.trusted_entry_events"
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
             elif event_type == "EXIT":
-                final_trusted_df = trusted_df.selectExpr(
-                    "eventId", "timestamp", "carId",
-                    "eventDetails.imagePath as imagePath",
-                    "eventDetails.assignedSlotId as slotId",
-                    "eventDetails.entryTimestamp as entryTimestamp",
-                    "eventDetails.durationInSeconds as durationInSeconds",
-                    "eventDetails.entryEventId as entryEventId"
-                )
-                trusted_table = "nessie.parking_data.trusted_exit_events"
+                final_trusted_df = trusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.entryTimestamp as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId")
+                trusted_table = "nessie.parking_data_staging.trusted_exit_events"
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
 
         if not untrusted_df.rdd.isEmpty():
             final_untrusted_df = untrusted_df.withColumn("processing_timestamp", current_timestamp())
             if event_type == "ENTRY":
-                final_untrusted_df = final_untrusted_df.selectExpr(
-                    "eventId", "timestamp", "carId",
-                    "eventDetails.imagePath as imagePath",
-                    "eventDetails.assignedSlotId as slotId",
-                    "eventDetails.slotCoordinates as slotCoordinates",
-                    "raw_payload", "validation_error", "processing_timestamp"
-                )
-                untrusted_table = "nessie.parking_data.untrusted_entry_events"
+                # [수정] Staging 네임스페이스의 untrusted 테이블을 대상으로 함
+                final_untrusted_df = final_untrusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates", "raw_payload", "validation_error", "processing_timestamp")
+                untrusted_table = "nessie.parking_data_staging.untrusted_entry_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
             elif event_type == "EXIT":
-                final_untrusted_df = final_untrusted_df.selectExpr(
-                    "eventId", "timestamp", "carId",
-                    "eventDetails.imagePath as imagePath",
-                    "eventDetails.assignedSlotId as slotId",
-                    "eventDetails.entryTimestamp as entryTimestamp",
-                    "eventDetails.durationInSeconds as durationInSeconds",
-                    "eventDetails.entryEventId as entryEventId",
-                    "raw_payload", "validation_error", "processing_timestamp"
-                )
-                untrusted_table = "nessie.parking_data.untrusted_exit_events"
+                final_untrusted_df = final_untrusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.entryTimestamp as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId", "raw_payload", "validation_error", "processing_timestamp")
+                untrusted_table = "nessie.parking_data_staging.untrusted_exit_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
 
@@ -192,7 +188,7 @@ data:
     if __name__ == "__main__":
         main()
 
-  # 두 번째 스크립트: merge_to_main.py (변경 없음)
+  # 두 번째 스크립트: merge_to_main.py (MERGE INTO 사용 버전)
   merge_to_main.py: |
     import os
     from pyspark.sql import SparkSession
@@ -202,13 +198,26 @@ data:
             SparkSession.builder.appName("NessieMergeToMain")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
             .config("spark.sql.catalog.nessie.ref", "main")
-            .config("spark.sql.extensions", "org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
+            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
             .getOrCreate()
         )
-        print("Attempting to merge 'dev' branch into 'main'...")
+        print("Merging trusted tables from staging@dev to prod@main...")
         try:
-            spark.sql("MERGE BRANCH dev INTO main IN nessie")
-            print("Successfully merged 'dev' into 'main'.")
+            # [수정] MERGE INTO 구문을 사용하여 staging의 trusted 데이터만 prod로 병합합니다.
+            spark.sql("""
+            MERGE INTO nessie.parking_data_prod.trusted_entry_events t
+            USING (SELECT * FROM nessie.parking_data_staging.trusted_entry_events AT BRANCH dev) s
+            ON t.eventId = s.eventId
+            WHEN NOT MATCHED THEN INSERT *
+            """)
+            
+            spark.sql("""
+            MERGE INTO nessie.parking_data_prod.trusted_exit_events t
+            USING (SELECT * FROM nessie.parking_data_staging.trusted_exit_events AT BRANCH dev) s
+            ON t.eventId = s.eventId
+            WHEN NOT MATCHED THEN INSERT *
+            """)
+            print("✅ Successfully merged trusted data.")
         except Exception as e:
             print(f"An error occurred during merge: {e}")
         spark.stop()
