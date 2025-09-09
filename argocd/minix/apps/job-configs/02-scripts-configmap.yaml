@@ -95,7 +95,7 @@ data:
                     "CAST(timestamp AS TIMESTAMP) as timestamp", 
                     "carId", 
                     "eventDetails.imagePath as imagePath", 
-                    "eventDetails.assignedSlotId as slotId", 
+                    "eventDetails.vacatedSlotId as slotId", 
                     "CAST(eventDetails.entryTimestamp AS TIMESTAMP) as entryTimestamp", 
                     "eventDetails.durationInSeconds as durationInSeconds", 
                     "eventDetails.entryEventId as entryEventId"
@@ -126,7 +126,7 @@ data:
                     "CAST(timestamp AS TIMESTAMP) as timestamp", 
                     "carId", 
                     "eventDetails.imagePath as imagePath", 
-                    "eventDetails.assignedSlotId as slotId", 
+                    "eventDetails.vacatedSlotId as slotId", 
                     "CAST(eventDetails.entryTimestamp AS TIMESTAMP) as entryTimestamp", 
                     "eventDetails.durationInSeconds as durationInSeconds", 
                     "eventDetails.entryEventId as entryEventId", 
@@ -140,7 +140,6 @@ data:
         max_offset_processed = new_files_df.select(spark_max("offset")).first()[0]
         if max_offset_processed is not None and max_offset_processed > last_offset:
             print(f"Updating watermark for '{topic_name}' partition 0 to: {max_offset_processed}")
-            # ✅ 4. MERGE SQL 문에서 불필요하고 오류를 유발하는 @dev 제거
             spark.sql(f"""
             MERGE INTO {watermark_table} t
             USING (SELECT '{topic_name}' as source_topic, 0 as partition, {max_offset_processed}L as new_offset) s
