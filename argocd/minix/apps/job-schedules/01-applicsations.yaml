@@ -5,7 +5,8 @@ metadata:
   name: parking-validation-schedule
   namespace: spark-operator
 spec:
-  schedule: "*/3 * * * *"
+  # 매시간 0분에 실행
+  schedule: "/*3 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
@@ -47,7 +48,8 @@ metadata:
   name: parking-merge-to-main-schedule
   namespace: spark-operator
 spec:
-  schedule: "*/5 * * * *"
+  # 매시간 10분에 실행
+  schedule: "/*5 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
@@ -55,13 +57,13 @@ spec:
     type: Python
     mode: cluster
     image: "ich6648/spark-iceberg-nessie-kafka:9.0"
+    imagePullPolicy: Always
     mainApplicationFile: "local:///mnt/scripts/merge_to_main.py"
     sparkVersion: "3.5.0"
     driver:
       serviceAccount: spark-sa
       cores: 1
       memory: "1g"
-      # ✅✅✅ 진짜 원인이었던, 누락된 envFrom 구문을 추가합니다 ✅✅✅
       envFrom:
         - secretRef:
             name: s3-creds-for-spark
@@ -72,7 +74,6 @@ spec:
       instances: 1
       cores: 1
       memory: "1g"
-      # ✅✅✅ Executor에도 동일하게 추가합니다 ✅✅✅
       envFrom:
         - secretRef:
             name: s3-creds-for-spark
