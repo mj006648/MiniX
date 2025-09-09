@@ -219,7 +219,7 @@ applications:
             - "argocd/minix/apps/nessie/values.yaml"
      # Wave 14: Spark Operator (Helm Chart 사용)
     spark-operator:
-      enabled: false
+      enabled: true
       # Operator 자체는 spark-operator 네임스페이스에 설치
       namespace: spark-operator
       syncWave: "14"
