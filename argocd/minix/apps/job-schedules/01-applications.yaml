@@ -6,7 +6,7 @@ metadata:
   namespace: spark-operator
 spec:
   # 매시간 0분에 실행
-  schedule: "*/3 * * * *"
+  schedule: "0 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
@@ -49,7 +49,7 @@ metadata:
   namespace: spark-operator
 spec:
   # 매시간 10분에 실행
-  schedule: "*/5 * * * *"
+  schedule: "15 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
@@ -84,3 +84,4 @@ spec:
       - name: scripts-volume
         configMap:
           name: spark-scripts
+
