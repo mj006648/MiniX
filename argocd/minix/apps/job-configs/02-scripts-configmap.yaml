@@ -6,7 +6,7 @@ metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (MERGE 문법 수정된 최종 버전)
+  # 첫 번째 스크립트: data_validator.py (EXIT 이벤트 필드명 수정)
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
@@ -40,7 +40,7 @@ data:
     def process_data(spark, topic_name, event_type):
         watermark_table = "nessie.parking_data_staging.landing_offset_watermarks"
         try:
-            watermarks_df = spark.read.table(f"{watermark_table}").filter((col("source_topic") == topic_name) & (col("partition") == 0)) # @dev 제거
+            watermarks_df = spark.read.table(f"{watermark_table}").filter((col("source_topic") == topic_name) & (col("partition") == 0))
             last_offset = watermarks_df.select("last_processed_offset").first()[0]
         except Exception:
             print(f"No watermark found for {topic_name}, partition 0. Assuming offset -1.")
@@ -82,7 +82,17 @@ data:
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
             elif event_type == "EXIT":
-                final_trusted_df = trusted_df.selectExpr("eventId", "to_timestamp(timestamp) as timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "to_timestamp(eventDetails.entryTimestamp) as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId")
+                # --- ✅✅✅ [핵심 수정] assignedSlotId 를 vacatedSlotId 로 변경하고 slotId 로 별칭을 부여합니다. ✅✅✅ ---
+                final_trusted_df = trusted_df.selectExpr(
+                    "eventId", 
+                    "to_timestamp(timestamp) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.vacatedSlotId as slotId", # 수정된 부분
+                    "to_timestamp(eventDetails.entryTimestamp) as entryTimestamp", 
+                    "eventDetails.durationInSeconds as durationInSeconds", 
+                    "eventDetails.entryEventId as entryEventId"
+                )
                 trusted_table = "nessie.parking_data_staging.trusted_exit_events"
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
@@ -94,7 +104,20 @@ data:
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
             elif event_type == "EXIT":
-                final_untrusted_df = untrusted_df.selectExpr("eventId", "to_timestamp(timestamp) as timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "to_timestamp(eventDetails.entryTimestamp) as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId", "raw_payload", "validation_error", "current_timestamp() as processing_timestamp")
+                 # --- ✅✅✅ [핵심 수정] untrusted 테이블에도 동일하게 적용합니다. ✅✅✅ ---
+                final_untrusted_df = untrusted_df.selectExpr(
+                    "eventId", 
+                    "to_timestamp(timestamp) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.vacatedSlotId as slotId", # 수정된 부분
+                    "to_timestamp(eventDetails.entryTimestamp) as entryTimestamp", 
+                    "eventDetails.durationInSeconds as durationInSeconds", 
+                    "eventDetails.entryEventId as entryEventId", 
+                    "raw_payload", 
+                    "validation_error", 
+                    "current_timestamp() as processing_timestamp"
+                )
                 untrusted_table = "nessie.parking_data_staging.untrusted_exit_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
@@ -102,7 +125,6 @@ data:
         max_offset_processed = new_files_df.select(spark_max("offset")).first()[0]
         if max_offset_processed is not None and max_offset_processed > last_offset:
             print(f"Updating watermark for '{topic_name}' partition 0 to: {max_offset_processed}")
-            # --- ✅✅✅ [핵심 수정] MERGE INTO 구문에서 @dev 를 제거합니다. ✅✅✅ ---
             spark.sql(f"""
             MERGE INTO {watermark_table} t
             USING (SELECT '{topic_name}' as source_topic, 0 as partition, {max_offset_processed}L as new_offset) s
