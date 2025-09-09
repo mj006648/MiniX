@@ -217,17 +217,18 @@ applications:
         helm:
           valueFiles:
             - "argocd/minix/apps/nessie/values.yaml"
-     # Wave 30: Spark Operator (공식 Kubeflow Helm Chart 사용)
+     # Wave 14: Spark Operator (Helm Chart 사용)
     spark-operator-helm:
       enabled: true
+      # Operator 자체는 spark-operator 네임스페이스에 설치
       namespace: spark-operator
       syncWave: "14"
       source:
         type: helm
         repoURL: https://kubeflow.github.io/spark-operator
         chart: spark-operator
-        targetRevision: "1.3.2"
+        targetRevision: "1.3.2" 
         helm:
-          releaseName: spark-operator
+          releaseName: spark-operator # 릴리즈 이름
           valueFiles:
             - "argocd/minix/apps/spark-operator/values.yaml"
