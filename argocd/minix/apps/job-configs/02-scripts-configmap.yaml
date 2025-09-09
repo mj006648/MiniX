@@ -6,7 +6,7 @@ metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (최종 완성 버전)
+  # 첫 번째 스크립트: data_validator.py (완성됨, 변경 없음)
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
@@ -78,62 +78,24 @@ data:
         untrusted_df = validated_df.filter(col("validation_error").isNotNull())
         if not trusted_df.rdd.isEmpty():
             if event_type == "ENTRY":
-                final_trusted_df = trusted_df.selectExpr(
-                    "eventId", 
-                    "CAST(timestamp AS TIMESTAMP) as timestamp", 
-                    "carId", 
-                    "eventDetails.imagePath as imagePath", 
-                    "eventDetails.assignedSlotId as slotId", 
-                    "eventDetails.slotCoordinates as slotCoordinates"
-                )
+                final_trusted_df = trusted_df.selectExpr( "eventId", "CAST(timestamp AS TIMESTAMP) as timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates" )
                 trusted_table = "nessie.parking_data_staging.trusted_entry_events"
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
             elif event_type == "EXIT":
-                final_trusted_df = trusted_df.selectExpr(
-                    "eventId", 
-                    "CAST(timestamp AS TIMESTAMP) as timestamp", 
-                    "carId", 
-                    "eventDetails.imagePath as imagePath", 
-                    "eventDetails.vacatedSlotId as slotId", 
-                    "CAST(eventDetails.entryTimestamp AS TIMESTAMP) as entryTimestamp", 
-                    "eventDetails.durationInSeconds as durationInSeconds", 
-                    "eventDetails.entryEventId as entryEventId"
-                )
+                final_trusted_df = trusted_df.selectExpr( "eventId", "CAST(timestamp AS TIMESTAMP) as timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.vacatedSlotId as slotId", "CAST(eventDetails.entryTimestamp AS TIMESTAMP) as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId" )
                 trusted_table = "nessie.parking_data_staging.trusted_exit_events"
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
         if not untrusted_df.rdd.isEmpty():
             final_untrusted_df = untrusted_df.withColumn("processing_timestamp", current_timestamp())
             if event_type == "ENTRY":
-                final_untrusted_df = final_untrusted_df.selectExpr(
-                    "eventId", 
-                    "CAST(timestamp AS TIMESTAMP) as timestamp", 
-                    "carId", 
-                    "eventDetails.imagePath as imagePath", 
-                    "eventDetails.assignedSlotId as slotId", 
-                    "eventDetails.slotCoordinates as slotCoordinates", 
-                    "raw_payload", 
-                    "validation_error", 
-                    "processing_timestamp"
-                )
+                final_untrusted_df = final_untrusted_df.selectExpr( "eventId", "CAST(timestamp AS TIMESTAMP) as timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates", "raw_payload", "validation_error", "processing_timestamp" )
                 untrusted_table = "nessie.parking_data_staging.untrusted_entry_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
             elif event_type == "EXIT":
-                final_untrusted_df = final_untrusted_df.selectExpr(
-                    "eventId", 
-                    "CAST(timestamp AS TIMESTAMP) as timestamp", 
-                    "carId", 
-                    "eventDetails.imagePath as imagePath", 
-                    "eventDetails.vacatedSlotId as slotId", 
-                    "CAST(eventDetails.entryTimestamp AS TIMESTAMP) as entryTimestamp", 
-                    "eventDetails.durationInSeconds as durationInSeconds", 
-                    "eventDetails.entryEventId as entryEventId", 
-                    "raw_payload", 
-                    "validation_error", 
-                    "processing_timestamp"
-                )
+                final_untrusted_df = final_untrusted_df.selectExpr( "eventId", "CAST(timestamp AS TIMESTAMP) as timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.vacatedSlotId as slotId", "CAST(eventDetails.entryTimestamp AS TIMESTAMP) as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId", "raw_payload", "validation_error", "processing_timestamp" )
                 untrusted_table = "nessie.parking_data_staging.untrusted_exit_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
@@ -158,7 +120,7 @@ data:
     if __name__ == "__main__":
         main()
 
-  # 두 번째 스크립트: merge_to_main.py (변경 없음)
+  # 두 번째 스크립트: merge_to_main.py (최종 수정된 버전)
   merge_to_main.py: |
     import os
     from pyspark.sql import SparkSession
@@ -173,15 +135,16 @@ data:
         )
         print("Merging trusted tables from staging@dev to prod@main...")
         try:
+            # ✅ 6. MERGE 문의 USING 절에서 서브쿼리를 제거하고 직접 테이블을 참조하도록 수정
             spark.sql("""
             MERGE INTO nessie.parking_data_prod.trusted_entry_events t
-            USING (SELECT * FROM nessie.parking_data_staging.trusted_entry_events AT BRANCH dev) s
+            USING nessie.parking_data_staging.trusted_entry_events AT BRANCH dev s
             ON t.eventId = s.eventId
             WHEN NOT MATCHED THEN INSERT *
             """)
             spark.sql("""
             MERGE INTO nessie.parking_data_prod.trusted_exit_events t
-            USING (SELECT * FROM nessie.parking_data_staging.trusted_exit_events AT BRANCH dev) s
+            USING nessie.parking_data_staging.trusted_exit_events AT BRANCH dev s
             ON t.eventId = s.eventId
             WHEN NOT MATCHED THEN INSERT *
             """)
