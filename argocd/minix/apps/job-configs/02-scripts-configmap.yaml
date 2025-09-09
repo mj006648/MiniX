@@ -6,7 +6,7 @@ metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (수정 완료된 버전)
+  # 첫 번째 스크립트: data_validator.py (최종 수정 버전)
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
@@ -18,7 +18,6 @@ data:
     S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
     S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
     S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
-    # ✅ 1. Nessie URI를 내부 서비스 DNS 주소로 수정
     NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
 
     def get_spark_session():
@@ -65,13 +64,10 @@ data:
         df_with_payload = new_files_df.withColumn("raw_payload", to_json(struct([col(c) for c in new_files_df.columns if c not in ['filename', 'offset']])))
         window_spec = Window.partitionBy("eventId").orderBy(col("timestamp").desc())
         df_with_row_num = df_with_payload.withColumn("row_num", row_number().over(window_spec))
-        
-        # ✅ 2. 스키마 불일치 문제를 해결하기 위해 유효성 검사 로직 수정
-        # 모든 이벤트에 공통적으로 적용될 기본 유효성 검사 규칙
+
         validation_condition = when(col("eventId").isNull(), "Primary key is null") \
                                .when(col("row_num") > 1, "Duplicate primary key")
 
-        # 출차(EXIT) 이벤트일 경우에만 durationInSeconds 검사 규칙을 추가
         if event_type == "EXIT":
             validation_condition = validation_condition \
                                    .when(col("eventDetails.durationInSeconds") < 0, "Negative duration")
@@ -82,24 +78,66 @@ data:
         untrusted_df = validated_df.filter(col("validation_error").isNotNull())
         if not trusted_df.rdd.isEmpty():
             if event_type == "ENTRY":
-                final_trusted_df = trusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates")
+                # ✅ 3. timestamp 컬럼을 TIMESTAMP 타입으로 형변환
+                final_trusted_df = trusted_df.selectExpr(
+                    "eventId", 
+                    "CAST(timestamp AS TIMESTAMP) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.assignedSlotId as slotId", 
+                    "eventDetails.slotCoordinates as slotCoordinates"
+                )
                 trusted_table = "nessie.parking_data_staging.trusted_entry_events"
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
             elif event_type == "EXIT":
-                final_trusted_df = trusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.entryTimestamp as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId")
+                # ✅ 3. timestamp와 entryTimestamp 컬럼을 TIMESTAMP 타입으로 형변환
+                final_trusted_df = trusted_df.selectExpr(
+                    "eventId", 
+                    "CAST(timestamp AS TIMESTAMP) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.assignedSlotId as slotId", 
+                    "CAST(eventDetails.entryTimestamp AS TIMESTAMP) as entryTimestamp", 
+                    "eventDetails.durationInSeconds as durationInSeconds", 
+                    "eventDetails.entryEventId as entryEventId"
+                )
                 trusted_table = "nessie.parking_data_staging.trusted_exit_events"
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
         if not untrusted_df.rdd.isEmpty():
             final_untrusted_df = untrusted_df.withColumn("processing_timestamp", current_timestamp())
             if event_type == "ENTRY":
-                final_untrusted_df = final_untrusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates", "raw_payload", "validation_error", "processing_timestamp")
+                # ✅ 3. untrusted 데이터에도 동일하게 형변환 적용
+                final_untrusted_df = final_untrusted_df.selectExpr(
+                    "eventId", 
+                    "CAST(timestamp AS TIMESTAMP) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.assignedSlotId as slotId", 
+                    "eventDetails.slotCoordinates as slotCoordinates", 
+                    "raw_payload", 
+                    "validation_error", 
+                    "processing_timestamp"
+                )
                 untrusted_table = "nessie.parking_data_staging.untrusted_entry_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
             elif event_type == "EXIT":
-                final_untrusted_df = final_untrusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.entryTimestamp as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId", "raw_payload", "validation_error", "processing_timestamp")
+                # ✅ 3. untrusted 데이터에도 동일하게 형변환 적용
+                final_untrusted_df = final_untrusted_df.selectExpr(
+                    "eventId", 
+                    "CAST(timestamp AS TIMESTAMP) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.assignedSlotId as slotId", 
+                    "CAST(eventDetails.entryTimestamp AS TIMESTAMP) as entryTimestamp", 
+                    "eventDetails.durationInSeconds as durationInSeconds", 
+                    "eventDetails.entryEventId as entryEventId", 
+                    "raw_payload", 
+                    "validation_error", 
+                    "processing_timestamp"
+                )
                 untrusted_table = "nessie.parking_data_staging.untrusted_exit_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
@@ -124,11 +162,10 @@ data:
     if __name__ == "__main__":
         main()
 
-  # 두 번째 스크립트: merge_to_main.py (수정 완료된 버전)
+  # 두 번째 스크립트: merge_to_main.py (이전 수정사항 유지)
   merge_to_main.py: |
     import os
     from pyspark.sql import SparkSession
-    # ✅ 1. Nessie URI를 내부 서비스 DNS 주소로 수정
     NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
     def main():
         spark = (
