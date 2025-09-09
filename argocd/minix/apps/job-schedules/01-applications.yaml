@@ -1,11 +1,11 @@
-job-schedules/01-applications.yaml
+# job-schedules/01-applications.yaml
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: ScheduledSparkApplication
 metadata:
   name: parking-validation-schedule
   namespace: spark-operator
 spec:
-  schedule: "*/30 * * * *"
+  schedule: "*/5 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
@@ -61,6 +61,10 @@ spec:
       serviceAccount: spark-sa
       cores: 1
       memory: "1g"
+      # ✅✅✅ 진짜 원인이었던, 누락된 envFrom 구문을 추가합니다 ✅✅✅
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-spark
       volumeMounts:
         - name: scripts-volume
           mountPath: /mnt/scripts
@@ -68,6 +72,10 @@ spec:
       instances: 1
       cores: 1
       memory: "1g"
+      # ✅✅✅ Executor에도 동일하게 추가합니다 ✅✅✅
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-spark
       volumeMounts:
         - name: scripts-volume
           mountPath: /mnt/scripts
@@ -75,4 +83,3 @@ spec:
       - name: scripts-volume
         configMap:
           name: spark-scripts
-
