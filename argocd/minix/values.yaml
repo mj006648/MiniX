@@ -95,7 +95,7 @@ applications:
         - CreateNamespace=true
     
     spark-job-configs: # <-- 앱 이름 확인
-      enabled: true
+      enabled: false
       namespace: spark-operator
       syncWave: "14"
       source:
@@ -103,7 +103,7 @@ applications:
 
     # Wave 15: 스케줄러 애플리케이션 배포
     spark-job-schedules: # <-- 앱 이름 확인
-      enabled: true
+      enabled: false
       namespace: spark-operator
       syncWave: "15"
       source:
@@ -219,7 +219,7 @@ applications:
             - "argocd/minix/apps/nessie/values.yaml"
      # Wave 30: Spark Operator (공식 Kubeflow Helm Chart 사용)
     spark-operator:
-      enabled: true
+      enabled: false
       namespace: spark-operator
       syncWave: "16"
       source:
