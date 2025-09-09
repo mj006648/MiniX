@@ -111,7 +111,7 @@ data:
     if __name__ == "__main__":
         main()
 
-  # 두 번째 스크립트: merge_to_main.py (S3 접속 정보 추가)
+  # 두 번째 스크립트: merge_to_main.py (S3 접속 정보 추가 및 SQL 문법 수정)
   merge_to_main.py: |
     import os
     from pyspark.sql import SparkSession
@@ -139,20 +139,39 @@ data:
         )
         print("Merging trusted tables from staging@dev to prod@main...")
         try:
-            spark.sql("USE CATALOG nessie")
+            # dev 브랜치의 데이터를 읽기 위해 임시 뷰(View)를 생성
+            spark.conf.set("spark.sql.catalog.nessie.ref", "dev")
+            source_entry_df = spark.read.table("nessie.parking_data_staging.trusted_entry_events")
+            source_entry_df.createOrReplaceTempView("source_entry_view")
+            
+            source_exit_df = spark.read.table("nessie.parking_data_staging.trusted_exit_events")
+            source_exit_df.createOrReplaceTempView("source_exit_view")
+
+            # MERGE 작업을 위해 main 브랜치로 다시 전환
+            spark.conf.set("spark.sql.catalog.nessie.ref", "main")
+            
+            # Entry 데이터 병합
+            print("Merging entry data into main branch...")
             spark.sql("""
-                MERGE INTO parking_data_prod.trusted_entry_events t
-                USING (SELECT * FROM parking_data_staging.trusted_entry_events AT BRANCH dev) s
+                MERGE INTO nessie.parking_data_prod.trusted_entry_events t
+                USING source_entry_view s
                 ON t.eventId = s.eventId
                 WHEN NOT MATCHED THEN INSERT *
             """)
+            print("Entry data merge complete.")
+
+            # Exit 데이터 병합
+            print("\nMerging exit data into main branch...")
             spark.sql("""
-                MERGE INTO parking_data_prod.trusted_exit_events t
-                USING (SELECT * FROM parking_data_staging.trusted_exit_events AT BRANCH dev) s
+                MERGE INTO nessie.parking_data_prod.trusted_exit_events t
+                USING source_exit_view s
                 ON t.eventId = s.eventId
                 WHEN NOT MATCHED THEN INSERT *
             """)
-            print("✅ Successfully merged trusted data.")
+            print("Exit data merge complete.")
+            
+            print("\n✅ Successfully merged trusted data.")
+
         except Exception as e:
             print(f"An error occurred during merge:\n{e}")
         finally:
