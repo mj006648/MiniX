@@ -122,7 +122,6 @@ data:
     import os
     from pyspark.sql import SparkSession
     
-    # ✅ S3 접속 정보를 환경 변수에서 가져오도록 추가
     S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
     S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
     S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
@@ -131,7 +130,6 @@ data:
     def main():
         spark = (
             SparkSession.builder.appName("NessieMergeToMain")
-            # ✅ data_validator.py와 동일하게 완전한 Spark 세션 설정을 추가
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
@@ -147,10 +145,18 @@ data:
         )
         print("Merging trusted tables from staging@dev to prod@main...")
         try:
-            # Entry 데이터 병합
+            # ✅ 8. 컨텍스트 전환(USE REFERENCE)을 사용하는 가장 안정적인 방식으로 수정
+            
+            # --- Entry 데이터 병합 ---
+            print("Switching context to 'dev' branch to read source data...")
+            spark.sql("USE REFERENCE dev IN nessie")
+            
             print("Reading source 'trusted_entry_events' from dev branch...")
-            source_entry_df = spark.read.table("nessie.parking_data_staging.trusted_entry_events@dev")
+            source_entry_df = spark.read.table("nessie.parking_data_staging.trusted_entry_events")
             source_entry_df.createOrReplaceTempView("source_entry_view")
+            
+            print("Switching context back to 'main' branch for merge operation...")
+            spark.sql("USE REFERENCE main IN nessie")
             
             print("Merging entry data into main branch...")
             spark.sql("""
@@ -161,10 +167,16 @@ data:
             """)
             print("Entry data merge complete.")
 
-            # Exit 데이터 병합
-            print("\nReading source 'trusted_exit_events' from dev branch...")
-            source_exit_df = spark.read.table("nessie.parking_data_staging.trusted_exit_events@dev")
+            # --- Exit 데이터 병합 ---
+            print("\nSwitching context to 'dev' branch to read source data...")
+            spark.sql("USE REFERENCE dev IN nessie")
+
+            print("Reading source 'trusted_exit_events' from dev branch...")
+            source_exit_df = spark.read.table("nessie.parking_data_staging.trusted_exit_events")
             source_exit_df.createOrReplaceTempView("source_exit_view")
+
+            print("Switching context back to 'main' branch for merge operation...")
+            spark.sql("USE REFERENCE main IN nessie")
 
             print("Merging exit data into main branch...")
             spark.sql("""
@@ -180,9 +192,6 @@ data:
         except Exception as e:
             print(f"An error occurred during merge:\n{e}")
         finally:
-            # 작업이 끝나면 임시 뷰 정리
-            spark.catalog.dropTempView("source_entry_view")
-            spark.catalog.dropTempView("source_exit_view")
             spark.stop()
             
     if __name__ == "__main__":
