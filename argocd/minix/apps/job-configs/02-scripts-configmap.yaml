@@ -1,12 +1,11 @@
 # spark-jobs/02-scripts-configmap.yaml
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (완성됨, 변경 없음)
+  # 첫 번째 스크립트: data_validator.py (간소화된 버전)
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
@@ -15,30 +14,25 @@ data:
     from pyspark.sql.utils import AnalysisException
     from pyspark.sql.types import LongType
 
-    S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
-    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
-    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
+    # ✅ S3 관련 환경 변수 로딩 코드 제거
     NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
 
     def get_spark_session():
         return (
             SparkSession.builder.appName("ParkingDataValidation")
+            # ✅ Spark 세션 생성 시 S3 관련 .config() 제거
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
             .config("spark.sql.catalog.nessie.ref", "dev")
             .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
-            .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
-            .config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
-            .config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
             .config("spark.hadoop.fs.s3a.path.style.access", "true")
             .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .getOrCreate()
         )
-
+    # ... 이하 process_data, main 함수는 이전과 동일 ...
     def process_data(spark, topic_name, event_type):
-        # ... (이하 로직은 변경 없음) ...
         watermark_table = "nessie.parking_data_staging.landing_offset_watermarks"
         try:
             watermarks_df = spark.read.table(f"{watermark_table}").filter((col("source_topic") == topic_name) & (col("partition") == 0))
@@ -117,37 +111,31 @@ data:
     if __name__ == "__main__":
         main()
 
-  # 두 번째 스크립트: merge_to_main.py (최종 수정된 버전)
+  # 두 번째 스크립트: merge_to_main.py (간소화된 버전)
   merge_to_main.py: |
     import os
     from pyspark.sql import SparkSession
     
-    S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
-    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
-    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
+    # ✅ S3 관련 환경 변수 로딩 코드 제거
     NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
 
     def main():
         spark = (
             SparkSession.builder.appName("NessieMergeToMain")
+            # ✅ Spark 세션 생성 시 S3 관련 .config() 제거
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
             .config("spark.sql.catalog.nessie.ref", "main")
             .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
-            .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
-            .config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
-            .config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
             .config("spark.hadoop.fs.s3a.path.style.access", "true")
             .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .getOrCreate()
         )
         print("Merging trusted tables from staging@dev to prod@main...")
         try:
-            # ✅ 8. 컨텍스트 전환(USE REFERENCE)을 사용하는 가장 안정적인 방식으로 수정
-            
-            # --- Entry 데이터 병합 ---
+            # Entry 데이터 병합
             print("Switching context to 'dev' branch to read source data...")
             spark.sql("USE REFERENCE dev IN nessie")
             
@@ -167,7 +155,7 @@ data:
             """)
             print("Entry data merge complete.")
 
-            # --- Exit 데이터 병합 ---
+            # Exit 데이터 병합
             print("\nSwitching context to 'dev' branch to read source data...")
             spark.sql("USE REFERENCE dev IN nessie")
 
