@@ -6,7 +6,7 @@ metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (오류 수정된 최종 버전)
+  # 첫 번째 스크립트: data_validator.py (타입 캐스팅 추가된 최종 버전)
   data_validator.py: |
     import os
     from pyspark.sql import SparkSession
@@ -26,7 +26,7 @@ data:
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
-            .config("spark.sql.catalog.nessie.ref", "dev") # 모든 데이터 조작은 'dev' 브랜치에서 수행
+            .config("spark.sql.catalog.nessie.ref", "dev")
             .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
             .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
@@ -65,46 +65,83 @@ data:
         window_spec = Window.partitionBy("eventId").orderBy(col("timestamp").desc())
         df_with_row_num = df_with_payload.withColumn("row_num", row_number().over(window_spec))
 
-        # --- ✅✅✅ [핵심 수정] 이벤트 타입에 따라 검증 규칙을 분리합니다 ✅✅✅ ---
-        # 공통 검증 규칙 (PK null, 중복)
         base_validation = when(col("eventId").isNull(), "Primary key is null").when(col("row_num") > 1, "Duplicate primary key")
-
-        # 이벤트 타입에 따라 추가 검증 규칙을 적용합니다.
         if event_type == "EXIT":
-            # EXIT 이벤트일 때만 durationInSeconds 필드를 검사합니다.
             final_validation = base_validation.when(col("eventDetails.durationInSeconds") < 0, "Negative duration")
         else:
-            # ENTRY 이벤트일 때는 추가 규칙이 없습니다.
             final_validation = base_validation
-
         validated_df = df_with_row_num.withColumn("validation_error", final_validation.otherwise(lit(None)))
-        # --- 수정 끝 ---
         
         trusted_df = validated_df.filter(col("validation_error").isNull())
         untrusted_df = validated_df.filter(col("validation_error").isNotNull())
+        
         if not trusted_df.rdd.isEmpty():
             if event_type == "ENTRY":
-                final_trusted_df = trusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates")
+                # ✅ [수정] to_timestamp() 함수를 사용하여 timestamp 컬럼 타입을 변환합니다.
+                final_trusted_df = trusted_df.selectExpr(
+                    "eventId", 
+                    "to_timestamp(timestamp) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.assignedSlotId as slotId", 
+                    "eventDetails.slotCoordinates as slotCoordinates"
+                )
                 trusted_table = "nessie.parking_data_staging.trusted_entry_events"
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
             elif event_type == "EXIT":
-                final_trusted_df = trusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.entryTimestamp as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId")
+                # ✅ [수정] timestamp와 entryTimestamp 컬럼 타입을 모두 변환합니다.
+                final_trusted_df = trusted_df.selectExpr(
+                    "eventId", 
+                    "to_timestamp(timestamp) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.assignedSlotId as slotId", 
+                    "to_timestamp(eventDetails.entryTimestamp) as entryTimestamp", 
+                    "eventDetails.durationInSeconds as durationInSeconds", 
+                    "eventDetails.entryEventId as entryEventId"
+                )
                 trusted_table = "nessie.parking_data_staging.trusted_exit_events"
                 final_trusted_df.writeTo(trusted_table).append()
                 print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
+        
         if not untrusted_df.rdd.isEmpty():
             final_untrusted_df = untrusted_df.withColumn("processing_timestamp", current_timestamp())
             if event_type == "ENTRY":
-                final_untrusted_df = final_untrusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates", "raw_payload", "validation_error", "processing_timestamp")
+                # ✅ [수정] untrusted 테이블도 동일하게 타입 변환을 적용합니다.
+                final_untrusted_df = final_untrusted_df.selectExpr(
+                    "eventId", 
+                    "to_timestamp(timestamp) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.assignedSlotId as slotId", 
+                    "eventDetails.slotCoordinates as slotCoordinates", 
+                    "raw_payload", 
+                    "validation_error", 
+                    "processing_timestamp"
+                )
                 untrusted_table = "nessie.parking_data_staging.untrusted_entry_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
             elif event_type == "EXIT":
-                final_untrusted_df = final_untrusted_df.selectExpr("eventId", "timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.entryTimestamp as entryTimestamp", "eventDetails.durationInSeconds as durationInSeconds", "eventDetails.entryEventId as entryEventId", "raw_payload", "validation_error", "processing_timestamp")
+                # ✅ [수정] untrusted 테이블도 동일하게 타입 변환을 적용합니다.
+                final_untrusted_df = final_untrusted_df.selectExpr(
+                    "eventId", 
+                    "to_timestamp(timestamp) as timestamp", 
+                    "carId", 
+                    "eventDetails.imagePath as imagePath", 
+                    "eventDetails.assignedSlotId as slotId", 
+                    "to_timestamp(eventDetails.entryTimestamp) as entryTimestamp", 
+                    "eventDetails.durationInSeconds as durationInSeconds", 
+                    "eventDetails.entryEventId as entryEventId", 
+                    "raw_payload", 
+                    "validation_error", 
+                    "processing_timestamp"
+                )
                 untrusted_table = "nessie.parking_data_staging.untrusted_exit_events"
                 final_untrusted_df.writeTo(untrusted_table).append()
                 print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
+                
         max_offset_processed = new_files_df.select(spark_max("offset")).first()[0]
         if max_offset_processed is not None and max_offset_processed > last_offset:
             print(f"Updating watermark for '{topic_name}' partition 0 to: {max_offset_processed}")
@@ -126,7 +163,7 @@ data:
     if __name__ == "__main__":
         main()
 
-  # 두 번째 스크립트: merge_to_main.py (S3 접속 정보 추가 및 SQL 문법 수정)
+  # 두 번째 스크립트: merge_to_main.py (변경 없음)
   merge_to_main.py: |
     import os
     from pyspark.sql import SparkSession
@@ -154,21 +191,15 @@ data:
         )
         
         try:
-            # dev 브랜치의 데이터를 읽기 위해 임시 뷰(View)를 생성
-            # 먼저 dev 브랜치로 컨텍스트를 전환합니다.
             spark.sql("USE REFERENCE dev IN nessie")
-            
-            # dev 브랜치의 테이블을 읽어 데이터프레임을 생성합니다.
             source_entry_df = spark.read.table("nessie.parking_data_staging.trusted_entry_events")
             source_entry_df.createOrReplaceTempView("source_entry_view")
             
             source_exit_df = spark.read.table("nessie.parking_data_staging.trusted_exit_events")
             source_exit_df.createOrReplaceTempView("source_exit_view")
 
-            # MERGE 작업을 위해 main 브랜치로 다시 전환합니다.
             spark.sql("USE REFERENCE main IN nessie")
             
-            # Entry 데이터 병합
             print("Merging entry data into main branch...")
             spark.sql("""
                 MERGE INTO nessie.parking_data_prod.trusted_entry_events t
@@ -178,7 +209,6 @@ data:
             """)
             print("Entry data merge complete.")
 
-            # Exit 데이터 병합
             print("\nMerging exit data into main branch...")
             spark.sql("""
                 MERGE INTO nessie.parking_data_prod.trusted_exit_events t
