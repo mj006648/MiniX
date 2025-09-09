@@ -48,7 +48,7 @@ metadata:
   name: parking-merge-to-main-schedule
   namespace: spark-operator
 spec:
-  # 매시간 10분에 실행
+  # 매시간 15분에 실행
   schedule: "15 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
