@@ -5,8 +5,9 @@ metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (간소화된 버전)
+  # data_validator.py는 원래부터 올바르게 되어 있었으므로 변경 없음
   data_validator.py: |
+    # ... (이전의 완전한 코드 그대로) ...
     import os
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import col, lit, when, row_number, to_json, struct, current_timestamp, input_file_name, regexp_extract, max as spark_max
@@ -14,24 +15,28 @@ data:
     from pyspark.sql.utils import AnalysisException
     from pyspark.sql.types import LongType
 
-    # ✅ S3 관련 환경 변수 로딩 코드 제거
+    S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
+    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
+    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
     NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
 
     def get_spark_session():
         return (
             SparkSession.builder.appName("ParkingDataValidation")
-            # ✅ Spark 세션 생성 시 S3 관련 .config() 제거
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
             .config("spark.sql.catalog.nessie.ref", "dev")
             .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
+            .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
+            .config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
+            .config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
             .config("spark.hadoop.fs.s3a.path.style.access", "true")
             .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .getOrCreate()
         )
-    # ... 이하 process_data, main 함수는 이전과 동일 ...
+
     def process_data(spark, topic_name, event_type):
         watermark_table = "nessie.parking_data_staging.landing_offset_watermarks"
         try:
@@ -111,24 +116,29 @@ data:
     if __name__ == "__main__":
         main()
 
-  # 두 번째 스크립트: merge_to_main.py (간소화된 버전)
+  # 두 번째 스크립트: merge_to_main.py (최종 수정된 버전)
   merge_to_main.py: |
     import os
     from pyspark.sql import SparkSession
     
-    # ✅ S3 관련 환경 변수 로딩 코드 제거
+    S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
+    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
+    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
     NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
 
     def main():
         spark = (
             SparkSession.builder.appName("NessieMergeToMain")
-            # ✅ Spark 세션 생성 시 S3 관련 .config() 제거
+            # ✅✅✅ data_validator.py와 100% 동일한, 완전한 설정으로 복구합니다 ✅✅✅
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
             .config("spark.sql.catalog.nessie.ref", "main")
             .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
+            .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
+            .config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
+            .config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
             .config("spark.hadoop.fs.s3a.path.style.access", "true")
             .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .getOrCreate()

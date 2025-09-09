@@ -5,7 +5,7 @@ metadata:
   name: parking-validation-schedule
   namespace: spark-operator
 spec:
-  schedule: "*/35 * * * *"
+  schedule: "*/5 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
@@ -18,26 +18,13 @@ spec:
     sparkVersion: "3.5.0"
     sparkConf:
       spark.jars.packages: "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262"
-      # ✅ Secret 값을 직접 참조하여 sparkConf에 주입합니다.
-      spark.hadoop.fs.s3a.endpoint: "http://rook-ceph-rgw-my-store.rook-ceph.svc:8080" # Endpoint는 고정값이므로 직접 입력
-      spark.hadoop.fs.s3a.access.key:
-        valueFrom:
-          secretKeyRef:
-            name: s3-creds-for-spark
-            key: S3_ACCESS_KEY
-      spark.hadoop.fs.s3a.secret.key:
-        valueFrom:
-          secretKeyRef:
-            name: s3-creds-for-spark
-            key: S3_SECRET_KEY
     driver:
       serviceAccount: spark-sa
       cores: 1
       memory: "1g"
-      # envFrom은 이제 필요 없으므로 삭제하거나 주석 처리합니다.
-      # envFrom:
-      #   - secretRef:
-      #       name: s3-creds-for-spark
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-spark
       volumeMounts:
         - name: scripts-volume
           mountPath: /mnt/scripts
@@ -45,10 +32,9 @@ spec:
       instances: 2
       cores: 1
       memory: "1g"
-      # envFrom은 이제 필요 없으므로 삭제하거나 주석 처리합니다.
-      # envFrom:
-      #   - secretRef:
-      #       name: s3-creds-for-spark
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-spark
       volumeMounts:
         - name: scripts-volume
           mountPath: /mnt/scripts
@@ -63,7 +49,7 @@ metadata:
   name: parking-merge-to-main-schedule
   namespace: spark-operator
 spec:
-  schedule: "*/5 * * * *"
+  schedule: "*/30 * * * *"
   concurrencyPolicy: Forbid
   successfulRunHistoryLimit: 3
   failedRunHistoryLimit: 3
@@ -75,26 +61,14 @@ spec:
     sparkVersion: "3.5.0"
     sparkConf:
       spark.jars.packages: "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262"
-      # ✅ Secret 값을 직접 참조하여 sparkConf에 주입합니다.
-      spark.hadoop.fs.s3a.endpoint: "http://rook-ceph-rgw-my-store.rook-ceph.svc:8080"
-      spark.hadoop.fs.s3a.access.key:
-        valueFrom:
-          secretKeyRef:
-            name: s3-creds-for-spark
-            key: S3_ACCESS_KEY
-      spark.hadoop.fs.s3a.secret.key:
-        valueFrom:
-          secretKeyRef:
-            name: s3-creds-for-spark
-            key: S3_SECRET_KEY
     driver:
       serviceAccount: spark-sa
       cores: 1
       memory: "1g"
-      # envFrom은 이제 필요 없으므로 삭제하거나 주석 처리합니다.
-      # envFrom:
-      #   - secretRef:
-      #       name: s3-creds-for-spark
+      # ✅✅✅ 진짜 원인이었던, 누락된 envFrom 구문을 추가합니다 ✅✅✅
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-spark
       volumeMounts:
         - name: scripts-volume
           mountPath: /mnt/scripts
@@ -102,10 +76,10 @@ spec:
       instances: 1
       cores: 1
       memory: "1g"
-      # envFrom은 이제 필요 없으므로 삭제하거나 주석 처리합니다.
-      # envFrom:
-      #   - secretRef:
-      #       name: s3-creds-for-spark
+      # ✅✅✅ Executor에도 동일하게 추가합니다 ✅✅✅
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-spark
       volumeMounts:
         - name: scripts-volume
           mountPath: /mnt/scripts
