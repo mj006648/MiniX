@@ -65,13 +65,9 @@ data:
         window_spec = Window.partitionBy("eventId").orderBy(col("timestamp").desc())
         df_with_row_num = df_with_payload.withColumn("row_num", row_number().over(window_spec))
 
-        validation_condition = when(col("eventId").isNull(), "Primary key is null") \
-                               .when(col("row_num") > 1, "Duplicate primary key")
-
+        validation_condition = when(col("eventId").isNull(), "Primary key is null").when(col("row_num") > 1, "Duplicate primary key")
         if event_type == "EXIT":
-            validation_condition = validation_condition \
-                                   .when(col("eventDetails.durationInSeconds") < 0, "Negative duration")
-
+            validation_condition = validation_condition.when(col("eventDetails.durationInSeconds") < 0, "Negative duration")
         validated_df = df_with_row_num.withColumn("validation_error", validation_condition.otherwise(lit(None)))
 
         trusted_df = validated_df.filter(col("validation_error").isNull())
@@ -135,22 +131,45 @@ data:
         )
         print("Merging trusted tables from staging@dev to prod@main...")
         try:
-            # ✅ 6. MERGE 문의 USING 절에서 서브쿼리를 제거하고 직접 테이블을 참조하도록 수정
+            # ✅ 7. 임시 뷰(Temporary View)를 사용하는 안정적인 방식으로 수정
+            
+            # Entry 데이터 병합
+            print("Reading source 'trusted_entry_events' from dev branch...")
+            source_entry_df = spark.read.table("nessie.parking_data_staging.trusted_entry_events@dev")
+            source_entry_df.createOrReplaceTempView("source_entry_view")
+            
+            print("Merging entry data into main branch...")
             spark.sql("""
-            MERGE INTO nessie.parking_data_prod.trusted_entry_events t
-            USING nessie.parking_data_staging.trusted_entry_events AT BRANCH dev s
-            ON t.eventId = s.eventId
-            WHEN NOT MATCHED THEN INSERT *
+                MERGE INTO nessie.parking_data_prod.trusted_entry_events t
+                USING source_entry_view s
+                ON t.eventId = s.eventId
+                WHEN NOT MATCHED THEN INSERT *
             """)
+            print("Entry data merge complete.")
+
+            # Exit 데이터 병합
+            print("\nReading source 'trusted_exit_events' from dev branch...")
+            source_exit_df = spark.read.table("nessie.parking_data_staging.trusted_exit_events@dev")
+            source_exit_df.createOrReplaceTempView("source_exit_view")
+
+            print("Merging exit data into main branch...")
             spark.sql("""
-            MERGE INTO nessie.parking_data_prod.trusted_exit_events t
-            USING nessie.parking_data_staging.trusted_exit_events AT BRANCH dev s
-            ON t.eventId = s.eventId
-            WHEN NOT MATCHED THEN INSERT *
+                MERGE INTO nessie.parking_data_prod.trusted_exit_events t
+                USING source_exit_view s
+                ON t.eventId = s.eventId
+                WHEN NOT MATCHED THEN INSERT *
             """)
-            print("✅ Successfully merged trusted data.")
+            print("Exit data merge complete.")
+            
+            print("\n✅ Successfully merged trusted data.")
+
         except Exception as e:
-            print(f"An error occurred during merge: {e}")
-        spark.stop()
+            print(f"An error occurred during merge:\n{e}")
+        finally:
+            # 작업이 끝나면 임시 뷰 정리
+            spark.catalog.dropTempView("source_entry_view")
+            spark.catalog.dropTempView("source_exit_view")
+            spark.stop()
+            
     if __name__ == "__main__":
         main()
