@@ -1,0 +1,47 @@
+apiVersion: platform.confluent.io/v1beta1
+kind: KafkaTopic
+metadata:
+  name: parking-entries
+  namespace: confluent
+spec:
+  replicas: 3
+  partitionCount: 1
+  kafkaClusterRef:
+    name: kafka
+  configs:
+    cleanup.policy: "delete"
+
+    # ★★★ [핵심 수정] 메시지 보존 기간을 3일 -> 6시간으로 대폭 단축 ★★★
+    # 6시간 = 21,600,000 밀리초
+    retention.ms: "21600000"
+
+    # ★★★ [핵심 수정] 로그 세그먼트 파일 크기를 1GB -> 128MB로 축소 ★★★
+    # 파일이 작을수록 보존 기간 만료 시 더 빠르고 효율적으로 삭제됩니다.
+    segment.bytes: "134217728"
+
+    # 압축 형식은 디스크 절약에 유리하므로 유지합니다.
+    compression.type: "lz4"
+---
+apiVersion: platform.confluent.io/v1beta1
+kind: KafkaTopic
+metadata:
+  name: parking-exits
+  namespace: confluent
+spec:
+  replicas: 3
+  partitionCount: 1
+  kafkaClusterRef:
+    name: kafka
+  configs:
+    cleanup.policy: "delete"
+
+    # ★★★ [핵심 수정] 메시지 보존 기간을 3일 -> 6시간으로 대폭 단축 ★★★
+    # 6시간 = 21,600,000 밀리초
+    retention.ms: "21600000"
+
+    # ★★★ [핵심 수정] 로그 세그먼트 파일 크기를 1GB -> 128MB로 축소 ★★★
+    # 파일이 작을수록 보존 기간 만료 시 더 빠르고 효율적으로 삭제됩니다.
+    segment.bytes: "134217728"
+
+    # 압축 형식은 디스크 절약에 유리하므로 유지합니다.
+    compression.type: "lz4"

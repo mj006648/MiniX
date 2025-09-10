@@ -1,4 +1,4 @@
-# confluent-platform/02-kafka-cluster.yaml
+# 02-kafka-cluster.yaml
 
 apiVersion: platform.confluent.io/v1beta1
 kind: Kafka
@@ -6,39 +6,24 @@ metadata:
   name: kafka
   namespace: confluent
 spec:
-  # 3개의 Kafka 브로커를 실행합니다.
   replicas: 3
-  
-  # [수정] 각 브로커가 사용할 데이터 볼륨의 용량을 20Gi로 늘립니다.
-  # 이것이 디스크 공간 부족 문제를 해결하는 가장 직접적인 방법입니다.
-  dataVolumeCapacity: 20Gi
-  
-  # 데이터 볼륨에 사용할 스토리지 클래스를 지정합니다.
+  dataVolumeCapacity: 20Gi # 데이터 볼륨 용량은 그대로 유지
   storageClass:
     name: rook-ceph-block-kafka
-    
-  # 사용할 Confluent Platform 이미지 버전을 지정합니다.
   image:
     application: confluentinc/cp-server:7.9.2
     init: confluentinc/confluent-init-container:2.11.2
-    
-  # Kafka 브로커가 통신할 리스너(네트워크 포트)를 정의합니다.
   listeners:
-    # 클러스터 내부 통신용 (브로커 간, 다른 컴포넌트 간)
     internal:
-      name: INTERNAL # configOverrides 에서 사용할 이름
+      name: INTERNAL
       port: 9071
       type: internal
-      
-    # 클러스터 외부 통신용 (Omniverse, Spark, 외부 클라이언트용)
     external:
-      name: EXTERNAL # configOverrides 에서 사용할 이름
+      name: EXTERNAL
       externalAccess:
         type: loadBalancer
         loadBalancer:
           domain: minix.local
-          
-  # Pod의 CPU 및 메모리 리소스 요청량과 최대 사용량을 설정합니다.
   podTemplate:
     resources:
       requests:
@@ -47,57 +32,47 @@ spec:
       limits:
         cpu: "500m"
         memory: "2Gi"
-        
-  # 이 Kafka 클러스터가 의존하는 KRaft 컨트롤러를 지정합니다.
   dependencies:
     kRaftController:
       clusterRef:
         name: kraftcontroller
-        
-  # Kafka 브로커의 상세 설정을 'server.properties' 파일에 적용합니다.
   configOverrides:
     server:
-      # --- 기존 설정 (유지) ---
+      # --- 기본 연결 및 복제 설정 ---
       - "inter.broker.listener.name=INTERNAL"
       - "listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,REPLICATION:PLAINTEXT"
       - "min.insync.replicas=2"
+      - "default.replication.factor=3"
+      
+      # --- Confluent 내부 토픽 복제 설정 ---
       - "confluent.license.topic.replication.factor=3"
-      # - "confluent.metrics.reporter.topic.replication.factor=3" # 아래에서 오버라이드되므로 주석 처리 또는 삭제 가능
       - "confluent.controlcenter.internal.topics.replication.factor=3"
       - "confluent.controlcenter.command.topic.replication.factor=3"
       - "confluent.monitoring.interceptor.topic.replication.factor=3"
       - "confluent.schema.topic.replication.factor=3"
-      - "default.replication.factor=3"
 
-      # --- [신규 추가] 요청하신 최적화 설정 ---
+      # ★★★ 일반 토픽에 대한 '기본' 보존 정책 ★★★
+      # (개별 토픽 설정이 이 값을 덮어쓸 수 있음)
+      - "log.retention.hours=12"          # 기본 12시간 보관
+      - "log.retention.bytes=536870912"     # 파티션당 최대 512MB
+      - "log.segment.bytes=134217728"     # 로그 파일 하나의 크기는 128MB
+      - "compression.type=lz4"            # 기본 압축 lz4 사용
 
-      # ★ 메트릭 토픽 보존 기간 단축 및 리소스 절약
-      # Confluent Control Center 등이 사용하는 내부 메트릭 토픽(_confluent-metrics)의
-      # 디스크 사용량을 줄이기 위한 설정입니다.
+      # ★★★ 추가된 최적화: 내부 관리 토픽 보존 기간 단축 ★★★
+      # 컨슈머 그룹의 오프셋 정보를 저장하는 토픽 (__consumer_offsets)의 보존 기간을
+      # 기본 7일(10080분)에서 1일(1440분)으로 줄여 디스크 공간을 절약합니다.
+      - "offsets.topic.retention.minutes=1440"
+      # 트랜잭션 상태를 저장하는 로그(__transaction_state)의 보존 기간을
+      # 기본 7일에서 1일(86400000ms)로 줄여 디스크 공간을 절약합니다.
+      - "transaction.state.log.retention.ms=86400000"
+      
+      # ★★★ 메트릭 토픽 최적화 (기존 설정 유지) ★★★
       - "confluent.metrics.reporter.enable=true"
       - "confluent.metrics.reporter.topic.partitions=3"
-      # 복제본 수를 1로 줄여 저장 공간을 1/3로 절약합니다. (고가용성이 덜 중요한 메트릭이므로)
-      - "confluent.metrics.reporter.topic.replication.factor=1"
-      # 메트릭 데이터를 1시간(3600000ms)만 보관하고 자동으로 삭제하여 공간을 확보합니다.
-      - "confluent.metrics.reporter.topic.retention.ms=3600000"
-      # 15초(15000ms)마다 메트릭을 전송합니다.
+      - "confluent.metrics.reporter.topic.replication.factor=1" # 복제본 1로 공간 절약
+      - "confluent.metrics.reporter.topic.retention.ms=3600000" # 1시간만 보관
       - "confluent.metrics.reporter.publish.ms=15000"
-
-      # ★ Telemetry / Self-Balancing 기능 비활성화
-      # Confluent 사로 익명의 사용 통계를 보내는 기능과, 파티션을 자동으로 재배치하는
-      # Self-Balancing 기능을 비활성화하여 불필요한 리소스 사용을 줄입니다.
+      
+      # ★★★ 불필요한 기능 비활성화 (기존 설정 유지) ★★★
       - "confluent.telemetry.enable=false"
       - "confluent.self.balancing.enable=false"
-
-      # ★ 일반 토픽의 기본 로그 보존 정책 설정
-      # 사용자가 생성하는 일반 토픽에 적용될 기본 보존 정책입니다.
-      # 디스크 공간이 무한정 커지는 것을 방지하는 가장 중요한 설정입니다.
-      # (개별 토픽 생성 시 이 값을 오버라이드할 수 있습니다.)
-      # 12시간이 지나면 로그를 삭제합니다.
-      - "log.retention.hours=12"
-      # 또는, 파티션 크기가 512MB를 초과하면 오래된 로그를 삭제합니다. (둘 중 하나라도 만족 시 삭제)
-      - "log.retention.bytes=536870912"
-      # 하나의 로그 파일(세그먼트)의 최대 크기를 128MB로 제한합니다.
-      - "log.segment.bytes=134217728"
-      # 메시지를 lz4 알고리즘으로 압축하여 디스크 공간을 절약합니다.
-      - "compression.type=lz4"
