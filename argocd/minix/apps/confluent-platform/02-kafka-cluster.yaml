@@ -7,7 +7,7 @@ metadata:
   namespace: confluent
 spec:
   replicas: 3
-  dataVolumeCapacity: 20Gi # 데이터 볼륨 용량은 그대로 유지
+  dataVolumeCapacity: 50Gi # 데이터 볼륨 용량은 그대로 유지
   storageClass:
     name: rook-ceph-block-kafka
   image:
