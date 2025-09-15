@@ -70,7 +70,7 @@ metadata:
     labels:
         kubernetes.io/metadata.name: spark-operator
     name: spark-operator
---
+---
 apiVersion: v1
 kind: Namespace
 metadata:
