@@ -1,0 +1,64 @@
+{
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {
+        "annotations": {
+            "argocd.argoproj.io/sync-options": "Prune=false,Delete=false",
+            "argocd.argoproj.io/tracking-id": "cluster-config:/Namespace:default/confluent",
+            "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"v1\",\"kind\":\"Namespace\",\"metadata\":{\"annotations\":{\"argocd.argoproj.io/sync-options\":\"Prune=false,Delete=false\",\"argocd.argoproj.io/tracking-id\":\"cluster-config:/Namespace:default/confluent\"},\"labels\":{\"kubernetes.io/metadata.name\":\"confluent\"},\"name\":\"confluent\"}}\n"
+        },
+        "creationTimestamp": "2025-09-10T02:06:50Z",
+        "deletionTimestamp": "2025-09-15T02:03:28Z",
+        "labels": {
+            "kubernetes.io/metadata.name": "confluent"
+        },
+        "name": "confluent",
+        "resourceVersion": "13382401",
+        "uid": "e65b96a3-ba05-4ab4-a43d-7c39624892da"
+    },
+    "spec": {
+        "finalizers": [
+            "kubernetes"
+        ]
+    },
+    "status": {
+        "conditions": [
+            {
+                "lastTransitionTime": "2025-09-15T02:03:33Z",
+                "message": "All resources successfully discovered",
+                "reason": "ResourcesDiscovered",
+                "status": "False",
+                "type": "NamespaceDeletionDiscoveryFailure"
+            },
+            {
+                "lastTransitionTime": "2025-09-15T02:03:33Z",
+                "message": "All legacy kube types successfully parsed",
+                "reason": "ParsedGroupVersions",
+                "status": "False",
+                "type": "NamespaceDeletionGroupVersionParsingFailure"
+            },
+            {
+                "lastTransitionTime": "2025-09-15T02:03:33Z",
+                "message": "All content successfully deleted, may be waiting on finalization",
+                "reason": "ContentDeleted",
+                "status": "False",
+                "type": "NamespaceDeletionContentFailure"
+            },
+            {
+                "lastTransitionTime": "2025-09-15T02:04:11Z",
+                "message": "Some resources are remaining: connectors.platform.confluent.io has 1 resource instances, kafkatopics.platform.confluent.io has 2 resource instances",
+                "reason": "SomeResourcesRemain",
+                "status": "True",
+                "type": "NamespaceContentRemaining"
+            },
+            {
+                "lastTransitionTime": "2025-09-15T02:04:11Z",
+                "message": "Some content in the namespace has finalizers remaining: connector.finalizers.platform.confluent.io in 1 resource instances, kafkatopic.finalizers.platform.confluent.io in 2 resource instances",
+                "reason": "SomeFinalizersRemain",
+                "status": "True",
+                "type": "NamespaceFinalizersRemaining"
+            }
+        ],
+        "phase": "Terminating"
+    }
+}
