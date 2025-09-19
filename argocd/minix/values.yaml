@@ -79,6 +79,17 @@ applications:
         # 1단계에서 만든 디렉토리 경로를 정확히 지정
         path: "argocd/minix/apps/accumulation"
 
+    # Wave 11: 데이터 축적(accumulation)을 위한 네임스페이스와 S3 버킷 생성
+    accumulation2:
+      enabled: true
+      # 이 애플리케이션이 관리하는 리소스들이 생성될 기본 네임스페이스
+      namespace: accumulation
+      # Ceph StorageClass(rook-ceph-bucket)가 생성된 후에 실행되어야 하므로 더 높은 syncWave를 부여
+      syncWave: "16"
+      source:
+        # 1단계에서 만든 디렉토리 경로를 정확히 지정
+        path: "argocd/minix/apps/accumulation2"
+
     # Wave 13: Nessie 추가 리소스 (Secret, LoadBalancers)
     # Helm 차트가 관리하지 않는, 우리가 직접 정의한 추가 리소스들을 배포합니다.
     nessie-resources:
