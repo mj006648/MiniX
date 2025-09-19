@@ -1,0 +1,40 @@
+# FILE: argocd/minix/apps/job-schedules/01-streaming-application.yaml
+
+apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: SparkApplication
+metadata:
+  name: dynamic-all-in-one-processor
+  namespace: spark-operator
+spec:
+  type: Python
+  mode: cluster
+  image: "ich6648/spark-iceberg-nessie-kafka:9.0" # Kafka 라이브러리가 포함된 이미지
+  imagePullPolicy: Always
+  mainApplicationFile: "local:///mnt/scripts/dynamic_all_in_one_processor.py"
+  sparkVersion: "3.5.0"
+  restartPolicy:
+    type: Always # 잡이 실패하면 Spark Operator가 항상 재시작
+  driver:
+    serviceAccount: spark-sa
+    cores: 1
+    memory: "1g"
+    envFrom:
+      - secretRef:
+          name: s3-creds-for-streaming-spark # 스트리밍용 Secret 참조
+    volumeMounts:
+      - name: scripts-volume
+        mountPath: /mnt/scripts
+  executor:
+    instances: 2
+    cores: 1
+    memory: "1g"
+    envFrom:
+      - secretRef:
+          name: s3-creds-for-streaming-spark
+    volumeMounts:
+      - name: scripts-volume
+        mountPath: /mnt/scripts
+  volumes:
+    - name: scripts-volume
+      configMap:
+        name: spark-scripts

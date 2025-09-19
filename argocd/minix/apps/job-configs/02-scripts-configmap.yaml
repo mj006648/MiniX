@@ -1,4 +1,4 @@
-# job-configs/02-scripts-configmap.yaml
+# FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
 
 apiVersion: v1
 kind: ConfigMap
@@ -6,29 +6,36 @@ metadata:
   name: spark-scripts
   namespace: spark-operator
 data:
-  # 첫 번째 스크립트: data_validator.py (EXIT 이벤트 필드명 수정)
-  data_validator.py: |
+  dynamic_all_in_one_processor.py: |
     import os
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import col, lit, when, row_number, to_json, struct, current_timestamp, input_file_name, regexp_extract, max as spark_max
-    from pyspark.sql.window import Window
+    from pyspark.sql.functions import from_json, col, lit, struct, to_json, current_timestamp
     from pyspark.sql.utils import AnalysisException
-    from pyspark.sql.types import LongType
 
+    # --- 1. 환경 변수 및 상수 정의 ---
     S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
     S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
     S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
     NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
+    KAFKA_BOOTSTRAP_SERVERS = "10.34.48.245:9092"
+    WAREHOUSE_PATH = "s3a://iceberg-data/warehouse" # iceberg-store에 생성한 버킷 경로
 
     def get_spark_session():
+        """Spark 세션을 초기화하고 반환합니다."""
         return (
-            SparkSession.builder.appName("ParkingDataValidation")
+            SparkSession.builder.appName("DynamicAllInOneProcessor")
+            .config("spark.jars.packages",
+                    "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,"
+                    "org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,"
+                    "org.apache.hadoop:hadoop-aws:3.3.4,"
+                    "com.amazonaws:aws-java-sdk-bundle:1.12.262,"
+                    "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0"
+            )
+            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
-            .config("spark.sql.catalog.nessie.ref", "dev")
-            .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
-            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
+            .config("spark.sql.catalog.nessie.warehouse", WAREHOUSE_PATH)
             .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
             .config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
             .config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
@@ -37,173 +44,106 @@ data:
             .getOrCreate()
         )
 
-    def process_data(spark, topic_name, event_type):
-        watermark_table = "nessie.parking_data_staging.landing_offset_watermarks"
-        try:
-            watermarks_df = spark.read.table(f"{watermark_table}").filter((col("source_topic") == topic_name) & (col("partition") == 0))
-            last_offset = watermarks_df.select("last_processed_offset").first()[0]
-        except Exception:
-            print(f"No watermark found for {topic_name}, partition 0. Assuming offset -1.")
-            last_offset = -1
-        print(f"Current watermark for '{topic_name}' partition 0 is: {last_offset}")
-        landing_path = f"s3a://iceberg/landing/{topic_name}/"
-        try:
-            offset_pattern = r'\+(\d+)\.json$'
-            all_files_df = spark.read.json(f"{landing_path}*/*/*/*").withColumn("filename", input_file_name()).withColumn("offset", regexp_extract(col("filename"), offset_pattern, 1).cast(LongType()))
-            new_files_df = all_files_df.filter(col("offset") > last_offset)
-            if new_files_df.rdd.isEmpty():
-                print(f"No new files to process for {topic_name} since offset {last_offset}.")
-                return
-            new_files_df.cache()
-            print(f"Found {new_files_df.count()} new files for {topic_name}. Processing...")
-        except AnalysisException as e:
-            if "Path does not exist" in str(e):
-                print(f"Path {landing_path} does not exist. Skipping.")
-                return
-            raise e
-        df_with_payload = new_files_df.withColumn("raw_payload", to_json(struct([col(c) for c in new_files_df.columns if c not in ['filename', 'offset']])))
-        window_spec = Window.partitionBy("eventId").orderBy(col("timestamp").desc())
-        df_with_row_num = df_with_payload.withColumn("row_num", row_number().over(window_spec))
+    def process_and_publish(spark, micro_batch_df):
+        """각 마이크로 배치를 처리하고 발행하는 핵심 함수입니다."""
+        if micro_batch_df.rdd.isEmpty():
+            return
 
-        base_validation = when(col("eventId").isNull(), "Primary key is null").when(col("row_num") > 1, "Duplicate primary key")
-        if event_type == "EXIT":
-            final_validation = base_validation.when(col("eventDetails.durationInSeconds") < 0, "Negative duration")
-        else:
-            final_validation = base_validation
-        validated_df = df_with_row_num.withColumn("validation_error", final_validation.otherwise(lit(None)))
-        
-        trusted_df = validated_df.filter(col("validation_error").isNull())
-        untrusted_df = validated_df.filter(col("validation_error").isNotNull())
-        
-        if not trusted_df.rdd.isEmpty():
-            if event_type == "ENTRY":
-                final_trusted_df = trusted_df.selectExpr("eventId", "to_timestamp(timestamp) as timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates")
-                trusted_table = "nessie.parking_data_staging.trusted_entry_events"
-                final_trusted_df.writeTo(trusted_table).append()
-                print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
-            elif event_type == "EXIT":
-                # --- ✅✅✅ [핵심 수정] assignedSlotId 를 vacatedSlotId 로 변경하고 slotId 로 별칭을 부여합니다. ✅✅✅ ---
-                final_trusted_df = trusted_df.selectExpr(
-                    "eventId", 
-                    "to_timestamp(timestamp) as timestamp", 
-                    "carId", 
-                    "eventDetails.imagePath as imagePath", 
-                    "eventDetails.vacatedSlotId as slotId", # 수정된 부분
-                    "to_timestamp(eventDetails.entryTimestamp) as entryTimestamp", 
-                    "eventDetails.durationInSeconds as durationInSeconds", 
-                    "eventDetails.entryEventId as entryEventId"
-                )
-                trusted_table = "nessie.parking_data_staging.trusted_exit_events"
-                final_trusted_df.writeTo(trusted_table).append()
-                print(f"Appended {final_trusted_df.count()} records to {trusted_table}")
-        
-        if not untrusted_df.rdd.isEmpty():
-            if event_type == "ENTRY":
-                final_untrusted_df = untrusted_df.selectExpr("eventId", "to_timestamp(timestamp) as timestamp", "carId", "eventDetails.imagePath as imagePath", "eventDetails.assignedSlotId as slotId", "eventDetails.slotCoordinates as slotCoordinates", "raw_payload", "validation_error", "current_timestamp() as processing_timestamp")
-                untrusted_table = "nessie.parking_data_staging.untrusted_entry_events"
-                final_untrusted_df.writeTo(untrusted_table).append()
-                print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
-            elif event_type == "EXIT":
-                 # --- ✅✅✅ [핵심 수정] untrusted 테이블에도 동일하게 적용합니다. ✅✅✅ ---
-                final_untrusted_df = untrusted_df.selectExpr(
-                    "eventId", 
-                    "to_timestamp(timestamp) as timestamp", 
-                    "carId", 
-                    "eventDetails.imagePath as imagePath", 
-                    "eventDetails.vacatedSlotId as slotId", # 수정된 부분
-                    "to_timestamp(eventDetails.entryTimestamp) as entryTimestamp", 
-                    "eventDetails.durationInSeconds as durationInSeconds", 
-                    "eventDetails.entryEventId as entryEventId", 
-                    "raw_payload", 
-                    "validation_error", 
-                    "current_timestamp() as processing_timestamp"
-                )
-                untrusted_table = "nessie.parking_data_staging.untrusted_exit_events"
-                final_untrusted_df.writeTo(untrusted_table).append()
-                print(f"Appended {final_untrusted_df.count()} records to {untrusted_table}")
+        distinct_topics = [row.topic for row in micro_batch_df.select("topic").distinct().collect()]
+
+        for topic_name in distinct_topics:
+            print(f"\n--- Processing topic: {topic_name} ---")
+            topic_df = micro_batch_df.filter(col("topic") == topic_name)
+            
+            # 토픽 이름에서 '-'를 '_'로 변경하여 네임스페이스/테이블 이름으로 사용 (SQL 호환성)
+            clean_topic_name = topic_name.replace('-', '_')
+            prod_namespace = f"{clean_topic_name}_prod"
+            staging_namespace = f"{clean_topic_name}_staging"
+            trusted_table = f"{clean_topic_name}_trusted"
+            untrusted_table = f"{clean_topic_name}_untrusted"
+            
+            # --- 2. 최초 온보딩 로직 ---
+            try:
+                spark.sql(f"USE REFERENCE main IN nessie")
+                spark.sql(f"SHOW TABLES IN nessie.{prod_namespace}")
+            except AnalysisException:
+                print(f"First message for topic '{topic_name}'. Starting Onboarding...")
+                spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.{prod_namespace}")
+                spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.{staging_namespace}")
                 
-        max_offset_processed = new_files_df.select(spark_max("offset")).first()[0]
-        if max_offset_processed is not None and max_offset_processed > last_offset:
-            print(f"Updating watermark for '{topic_name}' partition 0 to: {max_offset_processed}")
-            spark.sql(f"""
-            MERGE INTO {watermark_table} t
-            USING (SELECT '{topic_name}' as source_topic, 0 as partition, {max_offset_processed}L as new_offset) s
-            ON t.source_topic = s.source_topic AND t.partition = s.partition
-            WHEN MATCHED THEN UPDATE SET t.last_processed_offset = s.new_offset
-            WHEN NOT MATCHED THEN INSERT (source_topic, partition, last_processed_offset) VALUES ('{topic_name}', 0, {max_offset_processed}L)
-            """)
-        new_files_df.unpersist()
+                json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
+                if json_rdd.isEmpty(): continue
+                json_df = spark.read.json(json_rdd)
+                schema_ddl = spark.sparkContext._jvm.org.apache.iceberg.spark.SparkSchemaUtil.schemaToDDL(json_df.schema)
+
+                partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in json_df.columns else ""
+
+                spark.sql(f"CREATE TABLE nessie.{prod_namespace}.{trusted_table} ({schema_ddl}) USING iceberg {partition_by}")
+                spark.sql(f"CREATE TABLE nessie.{staging_namespace}.{trusted_table} ({schema_ddl}) USING iceberg {partition_by}")
+                spark.sql(f"""
+                    CREATE TABLE nessie.{staging_namespace}.{untrusted_table} (
+                        raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP
+                    ) USING iceberg PARTITIONED BY (days(processing_timestamp))
+                """)
+                
+                try:
+                    spark.sql("CREATE BRANCH dev IN nessie FROM main")
+                except Exception:
+                    pass
+                print(f"Onboarding for topic '{topic_name}' complete.")
+            
+            # --- 3. 데이터 처리 및 dev 브랜치에 커밋 ---
+            spark.sql("USE REFERENCE dev IN nessie")
+            json_df = spark.read.json(topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value))
+            
+            validated_df = json_df.withColumn("validation_error", when(col("eventId").isNull(), "eventId is null").otherwise(lit(None)))
+            trusted_df = validated_df.filter(col("validation_error").isNull())
+            untrusted_df = validated_df.filter(col("validation_error").isNotNull())
+
+            if not trusted_df.rdd.isEmpty():
+                trusted_df.select(json_df.columns).writeTo(f"nessie.{staging_namespace}.{trusted_table}").append()
+            
+            if not untrusted_df.rdd.isEmpty():
+                untrusted_df_with_payload = untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns])))
+                untrusted_df_with_payload.select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()).writeTo(f"nessie.{staging_namespace}.{untrusted_table}").append()
+            
+            print(f"Committed data for '{topic_name}' to 'dev' branch.")
+
+            # --- 4. 즉시 main 브랜치로 발행 ---
+            if not trusted_df.rdd.isEmpty():
+                print(f"Publishing trusted data for '{topic_name}' to 'main' branch...")
+                try:
+                    spark.sql(f"""
+                        MERGE INTO nessie.main.`{prod_namespace}`.`{trusted_table}` t
+                        USING (SELECT * FROM nessie.dev.`{staging_namespace}`.`{trusted_table}`) s
+                        ON t.eventId = s.eventId
+                        WHEN NOT MATCHED THEN INSERT *
+                    """)
+                    print(f"Successfully published trusted data for '{topic_name}'.")
+                except Exception as e:
+                    print(f"Error publishing data for topic '{topic_name}': {e}")
 
     def main():
         spark = get_spark_session()
-        process_data(spark, "parking-entries", "ENTRY")
-        process_data(spark, "parking-exits", "EXIT")
-        spark.stop()
+        spark.sparkContext.setLogLevel("WARN")
 
-    if __name__ == "__main__":
-        main()
-
-  # 두 번째 스크립트: merge_to_main.py (변경 없음)
-  merge_to_main.py: |
-    import os
-    from pyspark.sql import SparkSession
-    
-    S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
-    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
-    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
-    NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
-
-    def main():
-        spark = (
-            SparkSession.builder.appName("NessieMergeToMain")
-            .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
-            .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
-            .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
-            .config("spark.sql.catalog.nessie.ref", "main")
-            .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg/warehouse")
-            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
-            .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
-            .config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
-            .config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
-            .config("spark.hadoop.fs.s3a.path.style.access", "true")
-            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-            .getOrCreate()
+        kafka_df = (
+            spark.readStream
+            .format("kafka")
+            .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
+            .option("subscribePattern", "ice-.*") # 'ice-'로 시작하는 토픽만 구독
+            .option("startingOffsets", "earliest")
+            .load()
         )
         
-        try:
-            spark.sql("USE REFERENCE dev IN nessie")
-            source_entry_df = spark.read.table("nessie.parking_data_staging.trusted_entry_events")
-            source_entry_df.createOrReplaceTempView("source_entry_view")
-            
-            source_exit_df = spark.read.table("nessie.parking_data_staging.trusted_exit_events")
-            source_exit_df.createOrReplaceTempView("source_exit_view")
+        query = (
+            kafka_df.writeStream
+            .foreachBatch(lambda df, batch_id: process_and_publish(spark, df))
+            .option("checkpointLocation", f"{WAREHOUSE_PATH}/_checkpoints/all_in_one_processor")
+            .trigger(processingTime='1 minute')
+            .start()
+        )
+        query.awaitTermination()
 
-            spark.sql("USE REFERENCE main IN nessie")
-            
-            print("Merging entry data into main branch...")
-            spark.sql("""
-                MERGE INTO nessie.parking_data_prod.trusted_entry_events t
-                USING source_entry_view s
-                ON t.eventId = s.eventId
-                WHEN NOT MATCHED THEN INSERT *
-            """)
-            print("Entry data merge complete.")
-
-            print("\nMerging exit data into main branch...")
-            spark.sql("""
-                MERGE INTO nessie.parking_data_prod.trusted_exit_events t
-                USING source_exit_view s
-                ON t.eventId = s.eventId
-                WHEN NOT MATCHED THEN INSERT *
-            """)
-            print("Exit data merge complete.")
-            
-            print("\n✅ Successfully merged trusted data from 'dev' to 'main'.")
-
-        except Exception as e:
-            print(f"An error occurred during merge:\n{e}")
-        finally:
-            spark.stop()
-            
     if __name__ == "__main__":
         main()
