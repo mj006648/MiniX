@@ -13,6 +13,7 @@ data:
     from pyspark.sql.functions import from_json, col, lit, struct, to_json, current_timestamp, when
     from pyspark.sql.utils import AnalysisException
 
+    # --- 1. 환경 변수 및 상수 정의 ---
     S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
     S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
     S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
@@ -21,14 +22,21 @@ data:
     WAREHOUSE_PATH = "s3a://iceberg-data/warehouse"
 
     def get_spark_session():
+        """Spark 세션을 초기화하고 반환합니다."""
         return (
             SparkSession.builder.appName("DynamicAllInOneProcessor")
-            .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0")
+            .config("spark.jars.packages",
+                    "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,"
+                    "org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,"
+                    "org.apache.hadoop:hadoop-aws:3.3.4,"
+                    "com.amazonaws:aws-java-sdk-bundle:1.12.262,"
+                    "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0"
+            )
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
-            .config("spark.sql.catalog.nessie.ref", "dev")
+            .config("spark.sql.catalog.nessie.ref", "dev") # 기본 작업 브랜치를 'dev'로 설정
             .config("spark.sql.catalog.nessie.warehouse", WAREHOUSE_PATH)
             .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
             .config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
@@ -39,12 +47,14 @@ data:
         )
 
     def process_and_publish(spark, micro_batch_df):
+        """각 마이크로 배치를 처리하고 발행하는 핵심 함수입니다."""
         if micro_batch_df.rdd.isEmpty():
             return
 
         distinct_topics = [row.topic for row in micro_batch_df.select("topic").distinct().collect()]
+
         for topic_name in distinct_topics:
-            print(f"--- Processing topic: {topic_name} ---")
+            print(f"\n--- Processing topic: {topic_name} ---")
             topic_df = micro_batch_df.filter(col("topic") == topic_name)
             
             clean_topic_name = topic_name.replace('-', '_')
@@ -56,6 +66,7 @@ data:
             try:
                 spark.sql("USE REFERENCE main IN nessie")
                 spark.sql(f"SHOW TABLES IN {prod_namespace}")
+                print(f"Namespaces and tables for topic '{topic_name}' already exist.")
             except AnalysisException:
                 print(f"First message for topic '{topic_name}'. Starting Onboarding...")
                 spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {prod_namespace}")
@@ -65,11 +76,16 @@ data:
                 if json_rdd.isEmpty(): continue
                 json_df = spark.read.json(json_rdd)
                 schema_ddl = spark.sparkContext._jvm.org.apache.iceberg.spark.SparkSchemaUtil.schemaToDDL(json_df.schema)
+
                 partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in json_df.columns else ""
 
                 spark.sql(f"CREATE TABLE {prod_namespace}.{trusted_table} ({schema_ddl}) USING iceberg {partition_by}")
                 spark.sql(f"CREATE TABLE {staging_namespace}.{trusted_table} ({schema_ddl}) USING iceberg {partition_by}")
-                spark.sql(f"CREATE TABLE {staging_namespace}.{untrusted_table} (raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP) USING iceberg PARTITIONED BY (days(processing_timestamp))")
+                spark.sql(f"""
+                    CREATE TABLE {staging_namespace}.{untrusted_table} (
+                        raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP
+                    ) USING iceberg PARTITIONED BY (days(processing_timestamp))
+                """)
                 
                 try:
                     spark.sql("CREATE BRANCH dev IN nessie FROM main")
@@ -95,7 +111,12 @@ data:
             if not trusted_df.rdd.isEmpty():
                 print(f"Publishing trusted data for '{topic_name}' to 'main' branch...")
                 try:
-                    spark.sql(f"MERGE INTO {prod_namespace}.{trusted_table} AS t USING (SELECT * FROM {staging_namespace}.{trusted_table}@dev AS s) ON t.eventId = s.eventId WHEN NOT MATCHED THEN INSERT *")
+                    spark.sql(f"""
+                        MERGE INTO {prod_namespace}.{trusted_table} AS t
+                        USING (SELECT * FROM {staging_namespace}.{trusted_table}@dev AS s)
+                        ON t.eventId = s.eventId
+                        WHEN NOT MATCHED THEN INSERT *
+                    """)
                     print(f"Successfully published trusted data for '{topic_name}'.")
                 except Exception as e:
                     print(f"Error publishing data for topic '{topic_name}': {e}")
