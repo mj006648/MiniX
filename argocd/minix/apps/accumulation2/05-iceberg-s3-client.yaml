@@ -1,0 +1,43 @@
+# accumulation/05-iceberg-s3-client.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # 'iceberg' 데이터에 접근하기 위한 's3-client'
+  name: iceberg-s3-client
+  namespace: accumulation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iceberg-s3-client # Deployment가 관리할 Pod을 찾는 label
+  template:
+    metadata:
+      labels:
+        app: iceberg-s3-client # Pod에 붙일 label
+    spec:
+      containers:
+      - name: s3-client-container # 컨테이너 이름도 조금 더 명확하게
+        image: minio/mc
+        command: ["/bin/sh", "-c", "sleep infinity"]
+        env:
+          - name: S3_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                # 앞 단계에서 생성한 ObjectBucketClaim의 이름과 일치시켜야 합니다.
+                name: iceberg-bucket
+                key: AWS_ACCESS_KEY_ID
+          - name: S3_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: iceberg-bucket # 이름 일치
+                key: AWS_SECRET_ACCESS_KEY
+          - name: S3_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: iceberg-bucket # 이름 일치
+                key: BUCKET_HOST
+          - name: S3_BUCKET
+            valueFrom:
+              configMapKeyRef:
+                name: iceberg-bucket # 이름 일치
+                key: BUCKET_NAME

@@ -1,0 +1,32 @@
+# accumulation2/01-objectstore-claim.yaml
+apiVersion: ceph.rook.io/v1
+kind: CephObjectStore
+metadata:
+  name: iceberg-store
+  namespace: rook-ceph
+spec:
+  # RGW(Rados Gateway)가 데이터를 저장할 풀들에 대한 설정입니다.
+  metadataPool:
+    failureDomain: host
+    replicated:
+      size: 3 # 메타데이터는 3중 복제로 안전하게 보관합니다.
+  dataPool:
+    failureDomain: host
+    replicated:
+      size: 3 # 실제 데이터도 3중 복제로 안전하게 보관합니다.
+  
+  # RGW 데몬(S3 API 요청을 처리하는 서버)을 몇 개 띄울지 결정합니다.
+  # 고가용성을 위해 최소 2개 이상을 권장합니다.
+  gateway:
+    type: s3
+    replicas: 2
+    port: 8080
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+  config:
+    "rgw_frontends": "beast port=8080"

@@ -1,0 +1,13 @@
+# accumulation2/03-bucket-claim.yaml
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  # 이 OBC의 목적을 명확히 알 수 있는 이름
+  name: iceberg-bucket-claim
+  # 'accumulation' 네임스페이스에 생성
+  namespace: accumulation
+spec:
+  # 'rook-ceph-resources' 앱이 생성한 스토리지 클래스
+  storageClassName: rook-ceph-iscberg-sc
+  # 생성할 실제 버킷의 이름
+  bucketName: iceberg2

@@ -1,0 +1,21 @@
+# accumulation/04-iceberg-rgw-external-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  # 'rook-ceph'의 'rgw' 컴포넌트 중 'iceberg-store' 인스턴스를 'external'로 노출시킨다
+  name: rook-ceph-rgw-iceberg-store-external
+  namespace: rook-ceph
+spec:
+  type: LoadBalancer
+  # 이 selector는 'iceberg-store'가 생성한 RGW Pod을 정확히 찾아내야 합니다.
+  selector:
+    app: rook-ceph-rgw
+    # 'my-store'를 실제 CephObjectStore 이름인 'iceberg-store'로 모두 변경합니다.
+    rook_object_store: iceberg-store
+  ports:
+    - name: http-s3
+      # 외부 로드밸런서 IP에서 접근할 표준 HTTP 포트
+      port: 80
+      # Pod 내부에서 RGW가 리스닝하는 실제 포트
+      targetPort: 8080
+      protocol: TCP

@@ -1,0 +1,12 @@
+# accumulation2/02-storageclass-claim.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-ceph-iceberg-sc
+provisioner: rook-ceph.ceph.rook.io/bucket # OBC 프로비저너를 지정합니다.
+reclaimPolicy: Delete # OBC가 삭제되면 실제 버킷도 삭제되도록 설정합니다.
+parameters:
+  # 1단계에서 만든 CephObjectStore의 이름을 정확히 지정합니다.
+  objectStoreName: iceberg-store
+  # CephObjectStore가 존재하는 네임스페이스를 지정합니다.
+  objectStoreNamespace: rook-ceph
