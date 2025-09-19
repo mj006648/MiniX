@@ -9,7 +9,7 @@ data:
   dynamic_all_in_one_processor.py: |
     import os
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import from_json, col, lit, struct, to_json, current_timestamp
+    from pyspark.sql.functions import from_json, col, lit, struct, to_json, current_timestamp, when
     from pyspark.sql.utils import AnalysisException
 
     # --- 1. 환경 변수 및 상수 정의 ---
