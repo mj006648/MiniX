@@ -131,7 +131,7 @@ data:
             spark.readStream
             .format("kafka")
             .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
-            .option("subscribePattern", "ice-.*") # 'ice-'로 시작하는 토픽만 구독
+            .option("subscribePattern", "par-.*") # 'par-'로 시작하는 토픽만 구독
             .option("startingOffsets", "earliest")
             .load()
         )
@@ -140,7 +140,7 @@ data:
             kafka_df.writeStream
             .foreachBatch(lambda df, batch_id: process_and_publish(spark, df))
             .option("checkpointLocation", f"{WAREHOUSE_PATH}/_checkpoints/all_in_one_processor")
-            .trigger(processingTime='1 minute')
+            .trigger(processingTime='5 minute')
             .start()
         )
         query.awaitTermination()
