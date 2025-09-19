@@ -34,3 +34,9 @@ resources:
 # Prometheus 메트릭 수집을 위한 ServiceMonitor를 생성합니다.
 serviceMonitor:
   enabled: true
+
+# Nessie의 관리 엔드포인트(Health, Metrics 등)를 활성화합니다.
+management:
+  # Pod에 9000번 포트를 열도록 설정합니다.
+  enabled: true
+  # management 서비스는 기본적으로 생성되므로, 별도 설정은 필요 없습니다.
