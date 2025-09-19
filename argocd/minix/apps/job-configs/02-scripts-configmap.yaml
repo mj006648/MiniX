@@ -131,7 +131,7 @@ data:
             spark.readStream
             .format("kafka")
             .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
-            .option("subscribePattern", "par-.*") # 'par-'로 시작하는 토픽만 구독
+            .option("subscribePattern", "parking-.*") # 'parking-'로 시작하는 토픽만 구독
             .option("startingOffsets", "earliest")
             .load()
         )
