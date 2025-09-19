@@ -1,5 +1,5 @@
 # FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 수정: dev 브랜치 생성 로직 분리 및 모든 문제 해결
+# 최종 수정: 온보딩 기준을 '테이블 존재 여부'로 변경하고 모든 문제 해결
 
 apiVersion: v1
 kind: ConfigMap
@@ -46,7 +46,6 @@ data:
             return
 
         distinct_topics = [row.topic for row in micro_batch_df.select("topic").distinct().collect()]
-
         for topic_name in distinct_topics:
             print(f"\n--- Processing topic: {topic_name} ---")
             topic_df = micro_batch_df.filter(col("topic") == topic_name)
@@ -59,11 +58,9 @@ data:
             
             # --- 2. 최초 온보딩 로직 ---
             spark.sql("USE REFERENCE main IN nessie")
-            try:
-                spark.sql(f"SHOW TABLES IN {prod_namespace}")
-                print(f"Namespaces and tables for topic '{topic_name}' already exist on main branch.")
-            except AnalysisException:
-                print(f"First message for topic '{topic_name}'. Starting Onboarding...")
+            
+            if not spark.catalog.tableExists(f"{prod_namespace}.{trusted_table}"):
+                print(f"Table for topic '{topic_name}' not found on main branch. Starting Onboarding...")
                 spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {prod_namespace}")
                 spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {staging_namespace}")
                 
@@ -78,16 +75,14 @@ data:
                     spark.sql(f"CREATE TABLE {staging_namespace}.{untrusted_table} (raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP) USING iceberg PARTITIONED BY (days(processing_timestamp))")
                     print(f"Table creation for topic '{topic_name}' complete.")
 
-            # --- [핵심 수정] dev 브랜치 존재 여부를 별도로 확인하고, 없으면 생성 ---
             try:
                 spark.sql("USE REFERENCE dev IN nessie")
             except Exception:
                 print("Branch 'dev' not found. Creating it from 'main'...")
                 spark.sql("USE REFERENCE main IN nessie")
                 spark.sql("CREATE BRANCH dev IN nessie FROM main")
-                print("Branch 'dev' created successfully.")
-            
-            # --- 3. 데이터 처리 및 dev 브랜치에 커밋 ---
+
+            # --- 3. 데이터 처리 및 발행 ---
             spark.sql("USE REFERENCE dev IN nessie")
             json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
             if json_rdd.isEmpty(): continue
@@ -99,15 +94,8 @@ data:
 
             if not trusted_df.rdd.isEmpty():
                 trusted_df.select(json_df.columns).writeTo(f"{staging_namespace}.{trusted_table}").append()
-            
-            if not untrusted_df.rdd.isEmpty():
-                untrusted_df_with_payload = untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns])))
-                untrusted_df_with_payload.select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()).writeTo(f"{staging_namespace}.{untrusted_table}").append()
-            
-            print(f"Committed data for '{topic_name}' to 'dev' branch.")
+                print(f"Committed data for '{topic_name}' to 'dev' branch.")
 
-            # --- 4. 즉시 main 브랜치로 발행 ---
-            if not trusted_df.rdd.isEmpty():
                 print(f"Publishing trusted data for '{topic_name}' to 'main' branch...")
                 try:
                     spark.sql(f"""
@@ -119,6 +107,11 @@ data:
                     print(f"Successfully published trusted data for '{topic_name}'.")
                 except Exception as e:
                     print(f"Error publishing data for topic '{topic_name}': {e}")
+
+            if not untrusted_df.rdd.isEmpty():
+                untrusted_df_with_payload = untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns])))
+                untrusted_df_with_payload.select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()).writeTo(f"{staging_namespace}.{untrusted_table}").append()
+                print(f"Committed untrusted data for '{topic_name}' to 'dev' branch.")
 
     def main():
         spark = get_spark_session()
