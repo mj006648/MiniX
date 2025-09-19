@@ -1,5 +1,5 @@
 # FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 수정: 온보딩 기준을 '테이블 존재 여부'로 변경하고 모든 문제 해결
+# 최종 수정: 잘못된 Iceberg 함수 호출 수정 및 제안된 논리 흐름 완벽 반영
 
 apiVersion: v1
 kind: ConfigMap
@@ -30,13 +30,7 @@ data:
             .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
-            .config("spark.sql.catalog.nessie.ref", "dev") # 기본 작업 브랜치를 'dev'로 설정
             .config("spark.sql.catalog.nessie.warehouse", WAREHOUSE_PATH)
-            .config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
-            .config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
-            .config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
-            .config("spark.hadoop.fs.s3a.path.style.access", "true")
-            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .getOrCreate()
         )
 
@@ -56,18 +50,21 @@ data:
             trusted_table = f"{clean_topic_name}_trusted"
             untrusted_table = f"{clean_topic_name}_untrusted"
             
-            # --- 2. 최초 온보딩 로직 ---
+            # --- 2. 최초 온보딩 로직 (사용자 제안 로직 완벽 반영) ---
             spark.sql("USE REFERENCE main IN nessie")
+
+            # 네임스페이스 생성
+            spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {prod_namespace}")
+            spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {staging_namespace}")
             
+            # 테이블 존재 여부 확인 후 생성
             if not spark.catalog.tableExists(f"{prod_namespace}.{trusted_table}"):
-                print(f"Table for topic '{topic_name}' not found on main branch. Starting Onboarding...")
-                spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {prod_namespace}")
-                spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {staging_namespace}")
-                
+                print(f"Tables for topic '{topic_name}' not found. Creating...")
                 json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
                 if not json_rdd.isEmpty():
                     json_df = spark.read.json(json_rdd)
-                    schema_ddl = spark.sparkContext._jvm.org.apache.iceberg.spark.SparkSchemaUtil.schemaToDDL(json_df.schema)
+                    # --- [핵심 수정] 올바른 Iceberg 유틸리티 함수 사용 ---
+                    schema_ddl = spark.sparkContext._jvm.org.apache.iceberg.spark.SparkSQLUtil.schemaToDDL(json_df.schema)
                     partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in json_df.columns else ""
 
                     spark.sql(f"CREATE TABLE {prod_namespace}.{trusted_table} ({schema_ddl}) USING iceberg {partition_by}")
@@ -75,6 +72,7 @@ data:
                     spark.sql(f"CREATE TABLE {staging_namespace}.{untrusted_table} (raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP) USING iceberg PARTITIONED BY (days(processing_timestamp))")
                     print(f"Table creation for topic '{topic_name}' complete.")
 
+            # dev 브랜치 존재 여부 확인 및 생성
             try:
                 spark.sql("USE REFERENCE dev IN nessie")
             except Exception:
@@ -92,26 +90,21 @@ data:
             trusted_df = validated_df.filter(col("validation_error").isNull())
             untrusted_df = validated_df.filter(col("validation_error").isNotNull())
 
+            # dev 브랜치에 커밋
             if not trusted_df.rdd.isEmpty():
-                trusted_df.select(json_df.columns).writeTo(f"{staging_namespace}.{trusted_table}").append()
+                trusted_df.writeTo(f"{staging_namespace}.{trusted_table}").append()
                 print(f"Committed data for '{topic_name}' to 'dev' branch.")
-
-                print(f"Publishing trusted data for '{topic_name}' to 'main' branch...")
-                try:
-                    spark.sql(f"""
-                        MERGE INTO {prod_namespace}.{trusted_table} AS t
-                        USING (SELECT * FROM {staging_namespace}.{trusted_table}@dev AS s)
-                        ON t.eventId = s.eventId
-                        WHEN NOT MATCHED THEN INSERT *
-                    """)
-                    print(f"Successfully published trusted data for '{topic_name}'.")
-                except Exception as e:
-                    print(f"Error publishing data for topic '{topic_name}': {e}")
-
+            
             if not untrusted_df.rdd.isEmpty():
                 untrusted_df_with_payload = untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns])))
                 untrusted_df_with_payload.select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()).writeTo(f"{staging_namespace}.{untrusted_table}").append()
-                print(f"Committed untrusted data for '{topic_name}' to 'dev' branch.")
+
+            # main 브랜치로 발행
+            if not trusted_df.rdd.isEmpty():
+                print(f"Publishing trusted data for '{topic_name}' to 'main' branch...")
+                trusted_df.createOrReplaceTempView("source_view")
+                spark.sql(f"MERGE INTO {prod_namespace}.{trusted_table} t USING source_view s ON t.eventId = s.eventId WHEN NOT MATCHED THEN INSERT *")
+                print(f"Successfully published trusted data for '{topic_name}'.")
 
     def main():
         spark = get_spark_session()
