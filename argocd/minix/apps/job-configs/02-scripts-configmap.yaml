@@ -129,7 +129,7 @@ data:
             spark.readStream
             .format("kafka")
             .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
-            .option("subscribePattern", "ice-.*")
+            .option("subscribePattern", "parking-.*")
             .option("startingOffsets", "earliest")
             # --- ▼▼▼ [핵심 수정] 데이터 유실 시 실패하지 않도록 설정합니다 ▼▼▼ ---
             .option("failOnDataLoss", "false")
