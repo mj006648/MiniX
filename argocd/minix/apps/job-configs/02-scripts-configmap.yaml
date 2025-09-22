@@ -1,5 +1,5 @@
 # FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 수정: S3인증, foreachBatch 인자 전달 문제를 모두 해결한 최종 스트리밍 버전
+# 최종 버전: S3인증, foreachBatch 인자, 스키마 추론(TypeError) 문제를 모두 해결한 완전한 코드
 
 apiVersion: v1
 kind: ConfigMap
@@ -31,7 +31,6 @@ data:
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
             .config("spark.sql.catalog.nessie.warehouse", WAREHOUSE_PATH)
         )
-        # S3 인증 정보 설정 (AccessDenied 문제 해결)
         if S3_ENDPOINT:
             builder.config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
         if S3_ACCESS_KEY:
@@ -43,7 +42,6 @@ data:
         builder.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         return builder.getOrCreate()
 
-    # 이 함수는 Spark 세션과 DataFrame을 인자로 받습니다.
     def process_ingestion_batch(spark, micro_batch_df):
         if micro_batch_df.rdd.isEmpty(): return
 
@@ -63,45 +61,63 @@ data:
             prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
             if not spark.catalog.tableExists(prod_table_fqn):
                 print(f"First time seeing topic '{topic_name}'. Starting onboarding...")
-                spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{prod_namespace}`")
-                spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{staging_namespace}`")
+                
                 json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
                 if not json_rdd.isEmpty():
-                    json_df = spark.read.json(json_rdd)
-                    schema_ddl = spark.sparkContext._jvm.org.apache.iceberg.spark.SparkSQLUtil.schemaToDDL(json_df.schema)
-                    partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in json_df.columns else ""
-                    spark.sql(f"CREATE TABLE nessie.`{prod_namespace}`.`{trusted_table}` ({schema_ddl}) USING iceberg {partition_by}")
-                    spark.sql(f"CREATE TABLE nessie.`{staging_namespace}`.`{trusted_table}` ({schema_ddl}) USING iceberg {partition_by}")
-                    spark.sql(f"CREATE TABLE nessie.`{staging_namespace}`.`{untrusted_table}` (raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP) USING iceberg PARTITIONED BY (days(processing_timestamp))")
-                    print(f"Tables created on 'main' for topic '{topic_name}'.")
+                    json_df = spark.read.json(json_rdd).cache()
+                    
                     try:
+                        spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{prod_namespace}`")
+                        spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{staging_namespace}`")
+
+                        json_df.createOrReplaceTempView("temp_schema_view")
+
+                        partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in json_df.columns else ""
+                        
+                        spark.sql(f"CREATE TABLE {prod_table_fqn} USING iceberg {partition_by} AS SELECT * FROM temp_schema_view LIMIT 0")
+                        
+                        staging_trusted_fqn = f"nessie.`{staging_namespace}`.`{trusted_table}`"
+                        spark.sql(f"CREATE TABLE {staging_trusted_fqn} USING iceberg {partition_by} AS SELECT * FROM temp_schema_view LIMIT 0")
+
+                        staging_untrusted_fqn = f"nessie.`{staging_namespace}`.`{untrusted_table}`"
+                        spark.sql(f"CREATE TABLE {staging_untrusted_fqn} (raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP) USING iceberg PARTITIONED BY (days(processing_timestamp))")
+
+                        print(f"Tables created on 'main' for topic '{topic_name}'.")
+
                         spark.sql(f"CREATE BRANCH `{dev_branch_name}` IN nessie FROM main")
                         print(f"Branch '{dev_branch_name}' created from 'main'.")
+
                     except Exception as e:
-                        print(f"Branch '{dev_branch_name}' already exists or failed to create: {e}")
+                        print(f"An error occurred during onboarding for topic {topic_name}: {e}")
+                    finally:
+                        spark.catalog.dropTempView("temp_schema_view")
+                        json_df.unpersist()
+
             try:
                 spark.sql(f"USE REFERENCE `{dev_branch_name}` IN nessie")
             except Exception as e:
                 print(f"Could not switch to branch '{dev_branch_name}'. Skipping batch. Error: {e}")
                 continue
+
             json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
             if json_rdd.isEmpty(): continue
             json_df = spark.read.json(json_rdd)
+            
             validated_df = json_df.withColumn("validation_error", when(col("eventId").isNull(), "eventId is null").otherwise(lit(None)))
             trusted_df = validated_df.filter(col("validation_error").isNull())
             untrusted_df = validated_df.filter(col("validation_error").isNotNull())
+
             if not trusted_df.rdd.isEmpty():
                 trusted_df.writeTo(f"nessie.`{staging_namespace}`.`{trusted_table}`").append()
             if not untrusted_df.rdd.isEmpty():
-                untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns]))).select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()).writeTo(f"nessie.`{staging_namespace}`.`{untrusted_table}`").append()
+                untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns]))) \
+                    .select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()) \
+                    .writeTo(f"nessie.`{staging_namespace}`.`{untrusted_table}`").append()
 
     def main():
         spark = get_spark_session()
         kafka_df = spark.readStream.format("kafka").option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS).option("subscribePattern", "parking-.*").option("startingOffsets", "earliest").load()
         
-        # --- ▼▼▼ [핵심 수정] lambda를 사용하여 인자를 올바르게 전달 (AttributeError 문제 해결) ▼▼▼ ---
-        # Spark가 (df, batch_id)를 넘겨주면, lambda가 이를 받아서
-        # process_ingestion_batch 함수를 (spark, df) 형태로 올바르게 호출해줍니다.
         query = (
             kafka_df.writeStream
             .foreachBatch(lambda df, batch_id: process_ingestion_batch(spark, df))
@@ -109,16 +125,13 @@ data:
             .trigger(processingTime='1 minute')
             .start()
         )
-        # --- ▲▲▲ 여기까지 수정 ▲▲▲ ---
         query.awaitTermination()
 
     if __name__ == "__main__":
         main()
 
   # --- SCRIPT 2: 주기적으로 Staging 데이터를 Prod(main)으로 발행 ---
-  # 이 스크립트는 배치 잡이므로 수정할 필요가 없습니다.
   periodic_merge_to_main.py: |
-    # (이전 답변과 동일한, 수정 필요 없는 코드)
     import os
     from pyspark.sql import SparkSession
 
@@ -153,20 +166,27 @@ data:
         spark = get_spark_session()
         all_branches = spark.sql("LIST REFERENCES IN nessie").toPandas()
         dev_branches = all_branches[all_branches['referenceName'].str.endswith('_dev')]['referenceName'].tolist()
+        
         if not dev_branches:
             print("No '_dev' branches found. Exiting.")
             return
+
         print(f"Found dev branches to process: {dev_branches}")
+
         for dev_branch in dev_branches:
             try:
                 topic_name = dev_branch[:-4]
                 prod_namespace = f"{topic_name}_prod"
                 staging_namespace = f"{topic_name}_staging"
                 trusted_table = f"{topic_name}_trusted"
+                
                 prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
                 staging_table_fqn = f"nessie.`{staging_namespace}`.`{trusted_table}`"
+
                 print(f"\n--- Processing branch: {dev_branch} ---")
+                
                 spark.sql("USE REFERENCE main IN nessie")
+
                 merge_sql = f"""
                 MERGE INTO {prod_table_fqn} t
                 USING (SELECT * FROM {staging_table_fqn} AT BRANCH `{dev_branch}`) s
@@ -176,9 +196,11 @@ data:
                 print(f"Executing MERGE for {prod_table_fqn}...")
                 spark.sql(merge_sql)
                 print(f"Successfully merged data from '{dev_branch}' to 'main'.")
+
             except Exception as e:
                 print(f"ERROR: Failed to process branch {dev_branch}. Reason: {e}")
                 continue
+        
         spark.stop()
 
     if __name__ == "__main__":
