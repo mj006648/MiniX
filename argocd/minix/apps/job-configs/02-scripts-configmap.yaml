@@ -1,5 +1,5 @@
 # FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 버전: S3인증, foreachBatch 인자, 스키마 추론, 온보딩 로직 문제를 모두 해결한 완전한 코드
+# 최종 버전: 데이터 타입 변환 로직을 추가하여 파티셔닝 오류를 해결한 완전한 코드
 
 apiVersion: v1
 kind: ConfigMap
@@ -69,6 +69,11 @@ data:
                     try:
                         spark.sql("USE REFERENCE main IN nessie")
                         
+                        # --- ▼▼▼ [핵심 수정] timestamp 필드를 TIMESTAMP 타입으로 명시적 변환 ▼▼▼ ---
+                        if "timestamp" in json_df.columns:
+                            json_df = json_df.withColumn("timestamp", col("timestamp").cast("timestamp"))
+                        # --- ▲▲▲ 여기까지 수정 ▲▲▲ ---
+
                         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{prod_namespace}`")
                         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{staging_namespace}`")
 
@@ -108,10 +113,13 @@ data:
                 print(f"Could not switch to branch '{dev_branch_name}'. Skipping data write. Error: {e}")
                 continue
 
+            # 데이터 적재 시에도 timestamp 타입을 맞춰주기 위해 변환
             json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
             if json_rdd.isEmpty(): continue
             json_df = spark.read.json(json_rdd)
-            
+            if "timestamp" in json_df.columns:
+                json_df = json_df.withColumn("timestamp", col("timestamp").cast("timestamp"))
+
             validated_df = json_df.withColumn("validation_error", when(col("eventId").isNull(), "eventId is null").otherwise(lit(None)))
             trusted_df = validated_df.filter(col("validation_error").isNull())
             untrusted_df = validated_df.filter(col("validation_error").isNotNull())
