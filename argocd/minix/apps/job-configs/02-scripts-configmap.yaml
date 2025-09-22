@@ -1,5 +1,5 @@
 # FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 버전: 온보딩과 데이터 쓰기 로직을 명확히 분리하고, merge 잡의 ref 설정을 제거한 최종 코드
+# 최종 버전: ingestion 잡의 lambda 문제를 해결하고, merge 잡에 rlike 필터링을 적용한 완전한 코드
 
 apiVersion: v1
 kind: ConfigMap
@@ -42,16 +42,14 @@ data:
     def ensure_onboarding_completed(spark, topic_name, topic_df):
         dev_branch_name = f"{topic_name}_dev"
         try:
-            # 브랜치가 존재하는지 직접 확인
             spark.sql(f"USE REFERENCE `{dev_branch_name}` IN nessie")
             print(f"Branch '{dev_branch_name}' already exists. Onboarding previously completed.")
-            return True # 이미 존재하면 성공
+            return True
         except Exception as e:
             if "NessieReferenceNotFoundException" not in str(e):
                 print(f"🔥 ERROR checking branch existence for {topic_name}: {e}")
-                return False # 예상치 못한 에러면 실패
+                return False
 
-        # 브랜치가 존재하지 않으므로, 온보딩을 시작합니다.
         print(f"Branch '{dev_branch_name}' not found. Starting onboarding for topic '{topic_name}'...")
         try:
             json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
@@ -95,11 +93,11 @@ data:
 
             spark.sql(f"CREATE BRANCH `{dev_branch_name}` IN nessie FROM main")
             print(f"✅ Branch '{dev_branch_name}' created successfully.")
-            return True # 모든 온보딩이 성공적으로 끝나면 True 반환
+            return True
             
         except Exception as e:
             print(f"🔥 ERROR during onboarding for topic {topic_name}: {e}")
-            return False # 온보딩 중 어떤 에러라도 발생하면 실패
+            return False
         finally:
             spark.catalog.dropTempView("temp_schema_view_onboarding")
             json_df.unpersist()
@@ -207,9 +205,13 @@ data:
         print("--- Starting Periodic Merge to Main Job ---")
         
         all_references_df = spark.sql("LIST REFERENCES IN nessie")
+        
+        # --- ▼▼▼ [핵심 수정] Jupyter에서 성공한 rlike(정규식) 필터링 로직을 적용합니다. ▼▼▼ ---
         dev_branches_df = all_references_df.filter(
-            (col("refType") == "BRANCH") & (col("name").endswith("_dev"))
+            (col("refType") == "BRANCH") & (col("name").rlike(r".*_dev$"))
         )
+        # --- ▲▲▲ 여기까지 수정 ▲▲▲ ---
+        
         dev_branches = [row.name for row in dev_branches_df.select("name").collect()]
 
         if not dev_branches:
