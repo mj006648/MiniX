@@ -1,5 +1,5 @@
 # FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 버전: S3인증, foreachBatch 인자, 스키마 추론(TypeError) 문제를 모두 해결한 완전한 코드
+# 최종 버전: S3인증, foreachBatch 인자, 스키마 추론, 온보딩 로직 문제를 모두 해결한 완전한 코드
 
 apiVersion: v1
 kind: ConfigMap
@@ -45,6 +45,9 @@ data:
     def process_ingestion_batch(spark, micro_batch_df):
         if micro_batch_df.rdd.isEmpty(): return
 
+        all_branches_df = spark.sql("LIST REFERENCES IN nessie")
+        all_branches = [row.name for row in all_branches_df.filter(col("refType") == "BRANCH").select("name").collect()]
+
         distinct_topics = [row.topic for row in micro_batch_df.select("topic").distinct().collect()]
         for topic_name in distinct_topics:
             print(f"\n--- Ingesting topic: {topic_name} ---")
@@ -56,47 +59,53 @@ data:
             trusted_table = f"{topic_name}_trusted"
             untrusted_table = f"{topic_name}_untrusted"
             
-            spark.sql("USE REFERENCE main IN nessie")
-            
-            prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
-            if not spark.catalog.tableExists(prod_table_fqn):
-                print(f"First time seeing topic '{topic_name}'. Starting onboarding...")
+            if dev_branch_name not in all_branches:
+                print(f"Branch '{dev_branch_name}' not found. Starting/retrying onboarding for topic '{topic_name}'...")
                 
                 json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
                 if not json_rdd.isEmpty():
                     json_df = spark.read.json(json_rdd).cache()
                     
                     try:
+                        spark.sql("USE REFERENCE main IN nessie")
+                        
                         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{prod_namespace}`")
                         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{staging_namespace}`")
 
-                        json_df.createOrReplaceTempView("temp_schema_view")
+                        json_df.createOrReplaceTempView("temp_schema_view_onboarding")
 
                         partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in json_df.columns else ""
                         
-                        spark.sql(f"CREATE TABLE {prod_table_fqn} USING iceberg {partition_by} AS SELECT * FROM temp_schema_view LIMIT 0")
-                        
+                        prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
                         staging_trusted_fqn = f"nessie.`{staging_namespace}`.`{trusted_table}`"
-                        spark.sql(f"CREATE TABLE {staging_trusted_fqn} USING iceberg {partition_by} AS SELECT * FROM temp_schema_view LIMIT 0")
-
                         staging_untrusted_fqn = f"nessie.`{staging_namespace}`.`{untrusted_table}`"
+
+                        spark.sql(f"DROP TABLE IF EXISTS {prod_table_fqn}")
+                        spark.sql(f"CREATE TABLE {prod_table_fqn} USING iceberg {partition_by} AS SELECT * FROM temp_schema_view_onboarding LIMIT 0")
+                        
+                        spark.sql(f"DROP TABLE IF EXISTS {staging_trusted_fqn}")
+                        spark.sql(f"CREATE TABLE {staging_trusted_fqn} USING iceberg {partition_by} AS SELECT * FROM temp_schema_view_onboarding LIMIT 0")
+
+                        spark.sql(f"DROP TABLE IF EXISTS {staging_untrusted_fqn}")
                         spark.sql(f"CREATE TABLE {staging_untrusted_fqn} (raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP) USING iceberg PARTITIONED BY (days(processing_timestamp))")
 
-                        print(f"Tables created on 'main' for topic '{topic_name}'.")
+                        print(f"Tables created/recreated on 'main' for topic '{topic_name}'.")
 
                         spark.sql(f"CREATE BRANCH `{dev_branch_name}` IN nessie FROM main")
-                        print(f"Branch '{dev_branch_name}' created from 'main'.")
+                        print(f"Branch '{dev_branch_name}' created successfully.")
+                        all_branches.append(dev_branch_name)
 
                     except Exception as e:
-                        print(f"An error occurred during onboarding for topic {topic_name}: {e}")
+                        print(f"ERROR: Onboarding failed for topic {topic_name}: {e}")
+                        continue
                     finally:
-                        spark.catalog.dropTempView("temp_schema_view")
+                        spark.catalog.dropTempView("temp_schema_view_onboarding")
                         json_df.unpersist()
 
             try:
                 spark.sql(f"USE REFERENCE `{dev_branch_name}` IN nessie")
             except Exception as e:
-                print(f"Could not switch to branch '{dev_branch_name}'. Skipping batch. Error: {e}")
+                print(f"Could not switch to branch '{dev_branch_name}'. Skipping data write. Error: {e}")
                 continue
 
             json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
@@ -109,10 +118,12 @@ data:
 
             if not trusted_df.rdd.isEmpty():
                 trusted_df.writeTo(f"nessie.`{staging_namespace}`.`{trusted_table}`").append()
+                print(f"Appended trusted data to '{dev_branch_name}'.")
             if not untrusted_df.rdd.isEmpty():
                 untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns]))) \
                     .select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()) \
                     .writeTo(f"nessie.`{staging_namespace}`.`{untrusted_table}`").append()
+                print(f"Appended untrusted data to '{dev_branch_name}'.")
 
     def main():
         spark = get_spark_session()
