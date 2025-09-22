@@ -1,19 +1,21 @@
 # FILE: argocd/minix/apps/job-schedules/01-streaming-application.yaml
+# 최종 수정: 수집(ingestion) 스트리밍 잡을 실행하도록 이름 및 파일 경로 수정
 
 apiVersion: "sparkoperator.k8s.io/v1beta2"
 kind: SparkApplication
 metadata:
-  name: dynamic-all-in-one-processor
+  name: dynamic-kafka-ingestion
   namespace: spark-operator
 spec:
   type: Python
   mode: cluster
   image: "ich6648/spark-iceberg-nessie-kafka:9.0"
   imagePullPolicy: Always
-  mainApplicationFile: "local:///mnt/scripts/dynamic_all_in_one_processor.py"
+  # [수정] 수집 스크립트를 지정
+  mainApplicationFile: "local:///mnt/scripts/dynamic_ingestion.py"
   sparkVersion: "3.5.0"
   restartPolicy:
-    type: Always
+    type: Always # 스트리밍 잡은 항상 재시작되어야 함
   driver:
     serviceAccount: spark-sa
     cores: 1
@@ -24,29 +26,6 @@ spec:
     volumeMounts:
       - name: scripts-volume
         mountPath: /mnt/scripts
-    # --- ▼▼▼ [핵심] 이 부분을 드라이버에 추가합니다 ▼▼▼ ---
-    hostAliases:
-    - ip: "10.34.48.242" # kafka-0-lb의 EXTERNAL-IP
-      hostnames:
-      - "b0.minix.local"
-    - ip: "10.34.48.244" # kafka-1-lb의 EXTERNAL-IP
-      hostnames:
-      - "b1.minix.local"
-    - ip: "10.34.48.246" # kafka-2-lb의 EXTERNAL-IP
-      hostnames:
-      - "b2.minix.local"
-    # --- ▲▲▲ 여기까지 ▲▲▲ ---
-  executor:
-    instances: 2
-    cores: 1
-    memory: "1g"
-    envFrom:
-      - secretRef:
-          name: s3-creds-for-streaming-spark
-    volumeMounts:
-      - name: scripts-volume
-        mountPath: /mnt/scripts
-    # --- ▼▼▼ [핵심] 이 부분도 익스큐터에 동일하게 추가합니다 ▼▼▼ ---
     hostAliases:
     - ip: "10.34.48.242"
       hostnames:
@@ -57,7 +36,26 @@ spec:
     - ip: "10.34.48.246"
       hostnames:
       - "b2.minix.local"
-    # --- ▲▲▲ 여기까지 ▲▲▲ ---
+  executor:
+    instances: 2
+    cores: 1
+    memory: "1g"
+    envFrom:
+      - secretRef:
+          name: s3-creds-for-streaming-spark
+    volumeMounts:
+      - name: scripts-volume
+        mountPath: /mnt/scripts
+    hostAliases:
+    - ip: "10.34.48.242"
+      hostnames:
+      - "b0.minix.local"
+    - ip: "10.34.48.244"
+      hostnames:
+      - "b1.minix.local"
+    - ip: "10.34.48.246"
+      hostnames:
+      - "b2.minix.local"
   volumes:
     - name: scripts-volume
       configMap:

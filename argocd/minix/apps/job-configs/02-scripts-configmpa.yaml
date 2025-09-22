@@ -1,0 +1,182 @@
+# FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
+# 최종 수정: 토픽 이름 원본을 접두사로 사용하는 명명 규칙 완벽 적용 (백틱 처리 포함)
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-scripts
+  namespace: spark-operator
+data:
+  # --- SCRIPT 1: 실시간 데이터 수집 및 Staging 담당 ---
+  dynamic_ingestion.py: |
+    import os
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import col, lit, struct, to_json, current_timestamp, when
+    from pyspark.sql.utils import AnalysisException
+
+    S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
+    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
+    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
+    NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
+    KAFKA_BOOTSTRAP_SERVERS = "10.34.48.245:9092"
+    WAREHOUSE_PATH = "s3a://iceberg-data/warehouse"
+
+    def get_spark_session():
+        return (
+            SparkSession.builder.appName("DynamicIngestionProcessor")
+            .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0")
+            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
+            .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
+            .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
+            .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
+            .config("spark.sql.catalog.nessie.warehouse", WAREHOUSE_PATH)
+            .getOrCreate()
+        )
+
+    def process_ingestion_batch(spark, micro_batch_df):
+        if micro_batch_df.rdd.isEmpty(): return
+
+        distinct_topics = [row.topic for row in micro_batch_df.select("topic").distinct().collect()]
+        for topic_name in distinct_topics:
+            print(f"\n--- Ingesting topic: {topic_name} ---")
+            topic_df = micro_batch_df.filter(col("topic") == topic_name)
+            
+            # --- [핵심 수정] 명명 규칙 변경: topic_name을 그대로 사용 ---
+            dev_branch_name = f"{topic_name}_dev"
+            prod_namespace = f"{topic_name}_prod"
+            staging_namespace = f"{topic_name}_staging"
+            trusted_table = f"{topic_name}_trusted"
+            untrusted_table = f"{topic_name}_untrusted"
+            
+            spark.sql("USE REFERENCE main IN nessie")
+            
+            # 테이블 존재 여부 확인 (백틱 ` ` 사용)
+            prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
+            if not spark.catalog.tableExists(prod_table_fqn):
+                print(f"First time seeing topic '{topic_name}'. Starting onboarding...")
+                
+                # 네임스페이스 생성 (백틱 ` ` 사용)
+                spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{prod_namespace}`")
+                spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{staging_namespace}`")
+                
+                json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
+                if not json_rdd.isEmpty():
+                    json_df = spark.read.json(json_rdd)
+                    schema_ddl = spark.sparkContext._jvm.org.apache.iceberg.spark.SparkSQLUtil.schemaToDDL(json_df.schema)
+                    partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in json_df.columns else ""
+
+                    # 테이블 생성 (백틱 ` ` 사용)
+                    spark.sql(f"CREATE TABLE nessie.`{prod_namespace}`.`{trusted_table}` ({schema_ddl}) USING iceberg {partition_by}")
+                    spark.sql(f"CREATE TABLE nessie.`{staging_namespace}`.`{trusted_table}` ({schema_ddl}) USING iceberg {partition_by}")
+                    spark.sql(f"CREATE TABLE nessie.`{staging_namespace}`.`{untrusted_table}` (raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP) USING iceberg PARTITIONED BY (days(processing_timestamp))")
+                    print(f"Tables created on 'main' for topic '{topic_name}'.")
+
+                    try:
+                        # 브랜치 생성 (백틱 ` ` 사용)
+                        spark.sql(f"CREATE BRANCH `{dev_branch_name}` IN nessie FROM main")
+                        print(f"Branch '{dev_branch_name}' created from 'main'.")
+                    except Exception as e:
+                        print(f"Branch '{dev_branch_name}' already exists or failed to create: {e}")
+
+            try:
+                # 브랜치 전환 (백틱 ` ` 사용)
+                spark.sql(f"USE REFERENCE `{dev_branch_name}` IN nessie")
+            except Exception as e:
+                print(f"Could not switch to branch '{dev_branch_name}'. Skipping batch. Error: {e}")
+                continue
+
+            json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
+            if json_rdd.isEmpty(): continue
+            json_df = spark.read.json(json_rdd)
+            
+            validated_df = json_df.withColumn("validation_error", when(col("eventId").isNull(), "eventId is null").otherwise(lit(None)))
+            trusted_df = validated_df.filter(col("validation_error").isNull())
+            untrusted_df = validated_df.filter(col("validation_error").isNotNull())
+
+            # 데이터 적재 (백틱 ` ` 사용)
+            if not trusted_df.rdd.isEmpty():
+                trusted_df.writeTo(f"nessie.`{staging_namespace}`.`{trusted_table}`").append()
+            if not untrusted_df.rdd.isEmpty():
+                untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns]))) \
+                    .select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()) \
+                    .writeTo(f"nessie.`{staging_namespace}`.`{untrusted_table}`").append()
+
+    def main():
+        spark = get_spark_session()
+        kafka_df = spark.readStream.format("kafka").option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS).option("subscribePattern", "parking-.*").load()
+        query = kafka_df.writeStream.foreachBatch(process_ingestion_batch).option("checkpointLocation", f"{WAREHOUSE_PATH}/_checkpoints/dynamic_ingestion").trigger(processingTime='1 minute').start()
+        query.awaitTermination()
+
+    if __name__ == "__main__":
+        main()
+
+  # --- SCRIPT 2: 주기적으로 Staging 데이터를 Prod(main)으로 발행 ---
+  periodic_merge_to_main.py: |
+    import os
+    from pyspark.sql import SparkSession
+
+    S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
+    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
+    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
+    NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
+    WAREHOUSE_PATH = "s3a://iceberg-data/warehouse"
+
+    def get_spark_session():
+        return (
+            SparkSession.builder.appName("PeriodicMergeToMain")
+            .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262")
+            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
+            .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
+            .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
+            .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
+            .config("spark.sql.catalog.nessie.warehouse", WAREHOUSE_PATH)
+            .getOrCreate()
+        )
+
+    def main():
+        spark = get_spark_session()
+        all_branches = spark.sql("LIST REFERENCES IN nessie").toPandas()
+        dev_branches = all_branches[all_branches['referenceName'].str.endswith('_dev')]['referenceName'].tolist()
+        
+        if not dev_branches:
+            print("No '_dev' branches found. Exiting.")
+            return
+
+        print(f"Found dev branches to process: {dev_branches}")
+
+        for dev_branch in dev_branches:
+            try:
+                # [핵심 수정] 브랜치 이름에서 토픽 이름(접두사) 추출
+                topic_name = dev_branch[:-4] 
+                
+                prod_namespace = f"{topic_name}_prod"
+                staging_namespace = f"{topic_name}_staging"
+                trusted_table = f"{topic_name}_trusted"
+                
+                # [핵심 수정] MERGE 문에 사용할 전체 테이블 경로 (백틱 ` ` 사용)
+                prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
+                staging_table_fqn = f"nessie.`{staging_namespace}`.`{trusted_table}`"
+
+                print(f"\n--- Processing branch: {dev_branch} ---")
+                
+                spark.sql("USE REFERENCE main IN nessie")
+
+                # [핵심 수정] AT BRANCH 구문에 백틱 ` ` 사용
+                merge_sql = f"""
+                MERGE INTO {prod_table_fqn} t
+                USING (SELECT * FROM {staging_table_fqn} AT BRANCH `{dev_branch}`) s
+                ON t.eventId = s.eventId
+                WHEN NOT MATCHED THEN INSERT *
+                """
+                print(f"Executing MERGE for {prod_table_fqn}...")
+                spark.sql(merge_sql)
+                print(f"Successfully merged data from '{dev_branch}' to 'main'.")
+
+            except Exception as e:
+                print(f"ERROR: Failed to process branch {dev_branch}. Reason: {e}")
+                continue
+        
+        spark.stop()
+
+    if __name__ == "__main__":
+        main()
