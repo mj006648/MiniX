@@ -1,5 +1,5 @@
 # FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 버전: ingestion 잡의 lambda 문제를 해결하고, merge 잡에 가장 안정적인 필터링 로직을 적용한 완전한 코드
+# 최종 버전: ingestion/merge 잡의 모든 논리적 문제를 해결하고 안정성을 극대화한 완전한 코드
 
 apiVersion: v1
 kind: ConfigMap
@@ -205,13 +205,9 @@ data:
         print("--- Starting Periodic Merge to Main Job ---")
         
         all_references_df = spark.sql("LIST REFERENCES IN nessie")
-        
-        # --- ▼▼▼ [핵심 수정] Jupyter에서 성공한, 가장 안정적인 필터링 로직을 적용합니다. ▼▼▼ ---
         dev_branches_df = all_references_df.filter(
             (lower(trim(col("refType"))) == "branch") & (col("name").rlike(r".*_dev$"))
         )
-        # --- ▲▲▲ 여기까지 수정 ▲▲▲ ---
-        
         dev_branches = [row.name for row in dev_branches_df.select("name").collect()]
 
         if not dev_branches:
@@ -232,12 +228,28 @@ data:
                 staging_table_fqn = f"nessie.`{staging_namespace}`.`{trusted_table}`"
 
                 print(f"\n--- Processing branch: {dev_branch} ---")
+
+                # 1. 소스 데이터가 있는 dev 브랜치로 컨텍스트 전환
+                print(f"Switching to source branch: {dev_branch}")
+                spark.sql(f"USE REFERENCE `{dev_branch}` IN nessie")
                 
+                # 2. 소스 테이블을 읽어 임시 뷰 생성
+                source_df = spark.read.table(staging_table_fqn)
+                if source_df.rdd.isEmpty():
+                    print(f"No new data to merge in branch '{dev_branch}'. Skipping.")
+                    continue
+                
+                source_df.createOrReplaceTempView("source_view_for_merge")
+                print(f"Created temporary view with {source_df.count()} rows.")
+
+                # 3. 타겟 데이터가 있는 main 브랜치로 다시 컨텍스트 전환
+                print("Switching back to target branch: main")
                 spark.sql("USE REFERENCE main IN nessie")
 
+                # 4. 이제 main 컨텍스트에서 MERGE 실행
                 merge_sql = f"""
                 MERGE INTO {prod_table_fqn} t
-                USING (SELECT * FROM {staging_table_fqn} AT BRANCH `{dev_branch}`) s
+                USING source_view_for_merge s
                 ON t.eventId = s.eventId
                 WHEN NOT MATCHED THEN INSERT *
                 """
@@ -246,7 +258,7 @@ data:
                 print(f"✅ Successfully merged data from '{dev_branch}' to 'main'.")
 
             except Exception as e:
-                print(f"ERROR: Failed to process branch {dev_branch}. Reason: {e}")
+                print(f"🔥 ERROR: Failed to process branch {dev_branch}. Reason: {e}")
                 continue
         
         print("\n--- Periodic Merge to Main Job Finished ---")
