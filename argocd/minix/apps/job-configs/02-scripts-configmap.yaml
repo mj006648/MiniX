@@ -1,5 +1,5 @@
 # FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 수정: 토픽 이름 원본을 접두사로 사용하는 명명 규칙 완벽 적용 (백틱 처리 포함)
+# 최종 수정: S3 인증 정보를 Spark Session 설정에 명시적으로 추가하여 AccessDenied 오류 해결
 
 apiVersion: v1
 kind: ConfigMap
@@ -22,7 +22,8 @@ data:
     WAREHOUSE_PATH = "s3a://iceberg-data/warehouse"
 
     def get_spark_session():
-        return (
+        """Spark 세션을 초기화하고 S3 인증 정보를 명시적으로 설정합니다."""
+        builder = (
             SparkSession.builder.appName("DynamicIngestionProcessor")
             .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
@@ -30,8 +31,22 @@ data:
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
             .config("spark.sql.catalog.nessie.warehouse", WAREHOUSE_PATH)
-            .getOrCreate()
         )
+        
+        # --- ▼▼▼ [핵심 수정] S3 인증 정보를 Spark Hadoop 설정에 직접 추가 ▼▼▼ ---
+        if S3_ENDPOINT:
+            builder.config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
+        if S3_ACCESS_KEY:
+            builder.config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
+        if S3_SECRET_KEY:
+            builder.config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
+
+        builder.config("spark.hadoop.fs.s3a.path.style.access", "true")
+        builder.config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
+        builder.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        # --- ▲▲▲ 여기까지 수정 ▲▲▲ ---
+
+        return builder.getOrCreate()
 
     def process_ingestion_batch(spark, micro_batch_df):
         if micro_batch_df.rdd.isEmpty(): return
@@ -41,7 +56,6 @@ data:
             print(f"\n--- Ingesting topic: {topic_name} ---")
             topic_df = micro_batch_df.filter(col("topic") == topic_name)
             
-            # --- [핵심 수정] 명명 규칙 변경: topic_name을 그대로 사용 ---
             dev_branch_name = f"{topic_name}_dev"
             prod_namespace = f"{topic_name}_prod"
             staging_namespace = f"{topic_name}_staging"
@@ -50,12 +64,10 @@ data:
             
             spark.sql("USE REFERENCE main IN nessie")
             
-            # 테이블 존재 여부 확인 (백틱 ` ` 사용)
             prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
             if not spark.catalog.tableExists(prod_table_fqn):
                 print(f"First time seeing topic '{topic_name}'. Starting onboarding...")
                 
-                # 네임스페이스 생성 (백틱 ` ` 사용)
                 spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{prod_namespace}`")
                 spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{staging_namespace}`")
                 
@@ -65,21 +77,18 @@ data:
                     schema_ddl = spark.sparkContext._jvm.org.apache.iceberg.spark.SparkSQLUtil.schemaToDDL(json_df.schema)
                     partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in json_df.columns else ""
 
-                    # 테이블 생성 (백틱 ` ` 사용)
                     spark.sql(f"CREATE TABLE nessie.`{prod_namespace}`.`{trusted_table}` ({schema_ddl}) USING iceberg {partition_by}")
                     spark.sql(f"CREATE TABLE nessie.`{staging_namespace}`.`{trusted_table}` ({schema_ddl}) USING iceberg {partition_by}")
                     spark.sql(f"CREATE TABLE nessie.`{staging_namespace}`.`{untrusted_table}` (raw_payload STRING, validation_error STRING, processing_timestamp TIMESTAMP) USING iceberg PARTITIONED BY (days(processing_timestamp))")
                     print(f"Tables created on 'main' for topic '{topic_name}'.")
 
                     try:
-                        # 브랜치 생성 (백틱 ` ` 사용)
                         spark.sql(f"CREATE BRANCH `{dev_branch_name}` IN nessie FROM main")
                         print(f"Branch '{dev_branch_name}' created from 'main'.")
                     except Exception as e:
                         print(f"Branch '{dev_branch_name}' already exists or failed to create: {e}")
 
             try:
-                # 브랜치 전환 (백틱 ` ` 사용)
                 spark.sql(f"USE REFERENCE `{dev_branch_name}` IN nessie")
             except Exception as e:
                 print(f"Could not switch to branch '{dev_branch_name}'. Skipping batch. Error: {e}")
@@ -93,7 +102,6 @@ data:
             trusted_df = validated_df.filter(col("validation_error").isNull())
             untrusted_df = validated_df.filter(col("validation_error").isNotNull())
 
-            # 데이터 적재 (백틱 ` ` 사용)
             if not trusted_df.rdd.isEmpty():
                 trusted_df.writeTo(f"nessie.`{staging_namespace}`.`{trusted_table}`").append()
             if not untrusted_df.rdd.isEmpty():
@@ -122,7 +130,8 @@ data:
     WAREHOUSE_PATH = "s3a://iceberg-data/warehouse"
 
     def get_spark_session():
-        return (
+        """Spark 세션을 초기화하고 S3 인증 정보를 명시적으로 설정합니다."""
+        builder = (
             SparkSession.builder.appName("PeriodicMergeToMain")
             .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262")
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
@@ -130,8 +139,22 @@ data:
             .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
             .config("spark.sql.catalog.nessie.warehouse", WAREHOUSE_PATH)
-            .getOrCreate()
         )
+
+        # --- ▼▼▼ [핵심 수정] S3 인증 정보를 Spark Hadoop 설정에 직접 추가 ▼▼▼ ---
+        if S3_ENDPOINT:
+            builder.config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
+        if S3_ACCESS_KEY:
+            builder.config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
+        if S3_SECRET_KEY:
+            builder.config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
+
+        builder.config("spark.hadoop.fs.s3a.path.style.access", "true")
+        builder.config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
+        builder.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        # --- ▲▲▲ 여기까지 수정 ▲▲▲ ---
+
+        return builder.getOrCreate()
 
     def main():
         spark = get_spark_session()
@@ -146,14 +169,12 @@ data:
 
         for dev_branch in dev_branches:
             try:
-                # [핵심 수정] 브랜치 이름에서 토픽 이름(접두사) 추출
                 topic_name = dev_branch[:-4] 
                 
                 prod_namespace = f"{topic_name}_prod"
                 staging_namespace = f"{topic_name}_staging"
                 trusted_table = f"{topic_name}_trusted"
                 
-                # [핵심 수정] MERGE 문에 사용할 전체 테이블 경로 (백틱 ` ` 사용)
                 prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
                 staging_table_fqn = f"nessie.`{staging_namespace}`.`{trusted_table}`"
 
@@ -161,7 +182,6 @@ data:
                 
                 spark.sql("USE REFERENCE main IN nessie")
 
-                # [핵심 수정] AT BRANCH 구문에 백틱 ` ` 사용
                 merge_sql = f"""
                 MERGE INTO {prod_table_fqn} t
                 USING (SELECT * FROM {staging_table_fqn} AT BRANCH `{dev_branch}`) s
