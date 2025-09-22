@@ -1,5 +1,5 @@
-# FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 버전: 데이터 적재 시 불필요한 컬럼을 제거하여 Arity Mismatch 오류를 해결한 완전한 코드
+# FILE: argcd/minix/apps/job-configs/02-scripts-configmap.yaml
+# 최종 버전: 수집(Ingestion)과 발행(Merge) 잡을 위한 두 개의 독립된 스크립트를 모두 포함
 
 apiVersion: v1
 kind: ConfigMap
@@ -77,7 +77,6 @@ data:
                         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{staging_namespace}`")
 
                         df_for_schema.createOrReplaceTempView("temp_schema_view_onboarding")
-
                         partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in df_for_schema.columns else ""
                         
                         prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
@@ -124,12 +123,10 @@ data:
             trusted_df = validated_df.filter(col("validation_error").isNull())
             untrusted_df = validated_df.filter(col("validation_error").isNotNull())
 
-            # --- ▼▼▼ [핵심 수정] trusted_df에서 validation_error 컬럼을 제거하고 원본 컬럼만 선택 ▼▼▼ ---
             if not trusted_df.rdd.isEmpty():
                 trusted_df.select(original_columns).writeTo(f"nessie.`{staging_namespace}`.`{trusted_table}`").append()
                 print(f"Appended trusted data to '{dev_branch_name}'.")
-            # --- ▲▲▲ 여기까지 수정 ▲▲▲ ---
-
+            
             if not untrusted_df.rdd.isEmpty():
                 untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns]))) \
                     .select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()) \
@@ -153,11 +150,10 @@ data:
         main()
 
   # --- SCRIPT 2: 주기적으로 Staging 데이터를 Prod(main)으로 발행 ---
-  # 이 스크립트는 변경 사항이 없습니다.
   periodic_merge_to_main.py: |
-    # (이전과 동일한 코드)
     import os
     from pyspark.sql import SparkSession
+    from pyspark.sql.functions import col # col 함수를 import 합니다.
 
     S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
     S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
@@ -188,11 +184,17 @@ data:
 
     def main():
         spark = get_spark_session()
-        all_branches = spark.sql("LIST REFERENCES IN nessie").toPandas()
-        dev_branches = all_branches[all_branches['referenceName'].str.endswith('_dev')]['referenceName'].tolist()
+        print("--- Starting Periodic Merge to Main Job ---")
         
+        all_references_df = spark.sql("LIST REFERENCES IN nessie")
+        dev_branches_df = all_references_df.filter(
+            (col("refType") == "BRANCH") & (col("name").endswith("_dev"))
+        )
+        dev_branches = [row.name for row in dev_branches_df.select("name").collect()]
+
         if not dev_branches:
-            print("No '_dev' branches found. Exiting.")
+            print("No '_dev' branches found to process. Exiting.")
+            spark.stop()
             return
 
         print(f"Found dev branches to process: {dev_branches}")
@@ -225,6 +227,7 @@ data:
                 print(f"ERROR: Failed to process branch {dev_branch}. Reason: {e}")
                 continue
         
+        print("\n--- Periodic Merge to Main Job Finished ---")
         spark.stop()
 
     if __name__ == "__main__":
