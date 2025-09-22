@@ -1,5 +1,5 @@
 # FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 버전: 데이터 타입 변환 로직을 추가하여 파티셔닝 오류를 해결한 완전한 코드
+# 최종 버전: 데이터 적재 시 불필요한 컬럼을 제거하여 Arity Mismatch 오류를 해결한 완전한 코드
 
 apiVersion: v1
 kind: ConfigMap
@@ -69,17 +69,16 @@ data:
                     try:
                         spark.sql("USE REFERENCE main IN nessie")
                         
-                        # --- ▼▼▼ [핵심 수정] timestamp 필드를 TIMESTAMP 타입으로 명시적 변환 ▼▼▼ ---
-                        if "timestamp" in json_df.columns:
-                            json_df = json_df.withColumn("timestamp", col("timestamp").cast("timestamp"))
-                        # --- ▲▲▲ 여기까지 수정 ▲▲▲ ---
+                        df_for_schema = json_df
+                        if "timestamp" in df_for_schema.columns:
+                            df_for_schema = df_for_schema.withColumn("timestamp", col("timestamp").cast("timestamp"))
 
                         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{prod_namespace}`")
                         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{staging_namespace}`")
 
-                        json_df.createOrReplaceTempView("temp_schema_view_onboarding")
+                        df_for_schema.createOrReplaceTempView("temp_schema_view_onboarding")
 
-                        partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in json_df.columns else ""
+                        partition_by = "PARTITIONED BY (days(timestamp))" if "timestamp" in df_for_schema.columns else ""
                         
                         prod_table_fqn = f"nessie.`{prod_namespace}`.`{trusted_table}`"
                         staging_trusted_fqn = f"nessie.`{staging_namespace}`.`{trusted_table}`"
@@ -113,20 +112,24 @@ data:
                 print(f"Could not switch to branch '{dev_branch_name}'. Skipping data write. Error: {e}")
                 continue
 
-            # 데이터 적재 시에도 timestamp 타입을 맞춰주기 위해 변환
             json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
             if json_rdd.isEmpty(): continue
             json_df = spark.read.json(json_rdd)
+            original_columns = json_df.columns
+            
             if "timestamp" in json_df.columns:
                 json_df = json_df.withColumn("timestamp", col("timestamp").cast("timestamp"))
-
+                
             validated_df = json_df.withColumn("validation_error", when(col("eventId").isNull(), "eventId is null").otherwise(lit(None)))
             trusted_df = validated_df.filter(col("validation_error").isNull())
             untrusted_df = validated_df.filter(col("validation_error").isNotNull())
 
+            # --- ▼▼▼ [핵심 수정] trusted_df에서 validation_error 컬럼을 제거하고 원본 컬럼만 선택 ▼▼▼ ---
             if not trusted_df.rdd.isEmpty():
-                trusted_df.writeTo(f"nessie.`{staging_namespace}`.`{trusted_table}`").append()
+                trusted_df.select(original_columns).writeTo(f"nessie.`{staging_namespace}`.`{trusted_table}`").append()
                 print(f"Appended trusted data to '{dev_branch_name}'.")
+            # --- ▲▲▲ 여기까지 수정 ▲▲▲ ---
+
             if not untrusted_df.rdd.isEmpty():
                 untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns]))) \
                     .select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()) \
@@ -150,7 +153,9 @@ data:
         main()
 
   # --- SCRIPT 2: 주기적으로 Staging 데이터를 Prod(main)으로 발행 ---
+  # 이 스크립트는 변경 사항이 없습니다.
   periodic_merge_to_main.py: |
+    # (이전과 동일한 코드)
     import os
     from pyspark.sql import SparkSession
 
