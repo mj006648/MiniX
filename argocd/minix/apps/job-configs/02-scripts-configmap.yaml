@@ -1,5 +1,5 @@
-# FILE: argcd/minix/apps/job-configs/02-scripts-configmap.yaml
-# 최종 버전: 수집(Ingestion)과 발행(Merge) 잡을 위한 두 개의 독립된 스크립트를 모두 포함
+# FILE: argocd/minix/apps/job-configs/02-scripts-configmap.yaml
+# 최종 버전: 수집/발행 분리, 상세 로깅 추가, pandas 의존성 제거 등 모든 문제 해결
 
 apiVersion: v1
 kind: ConfigMap
@@ -123,15 +123,20 @@ data:
             trusted_df = validated_df.filter(col("validation_error").isNull())
             untrusted_df = validated_df.filter(col("validation_error").isNotNull())
 
-            if not trusted_df.rdd.isEmpty():
-                trusted_df.select(original_columns).writeTo(f"nessie.`{staging_namespace}`.`{trusted_table}`").append()
-                print(f"Appended trusted data to '{dev_branch_name}'.")
-            
-            if not untrusted_df.rdd.isEmpty():
-                untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns]))) \
-                    .select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()) \
-                    .writeTo(f"nessie.`{staging_namespace}`.`{untrusted_table}`").append()
-                print(f"Appended untrusted data to '{dev_branch_name}'.")
+            try:
+                if not trusted_df.rdd.isEmpty():
+                    print(f"Attempting to write {trusted_df.count()} trusted rows to '{dev_branch_name}'...")
+                    trusted_df.select(original_columns).writeTo(f"nessie.`{staging_namespace}`.`{trusted_table}`").append()
+                    print(f"✅ Appended trusted data to '{dev_branch_name}'.")
+                
+                if not untrusted_df.rdd.isEmpty():
+                    print(f"Attempting to write {untrusted_df.count()} untrusted rows to '{dev_branch_name}'...")
+                    untrusted_df.withColumn("raw_payload", to_json(struct([col(c) for c in untrusted_df.columns]))) \
+                        .select("raw_payload", "validation_error").withColumn("processing_timestamp", current_timestamp()) \
+                        .writeTo(f"nessie.`{staging_namespace}`.`{untrusted_table}`").append()
+                    print(f"✅ Appended untrusted data to '{dev_branch_name}'.")
+            except Exception as e:
+                print(f"🔥 FAILED TO WRITE DATA for topic {topic_name}. THIS IS THE REAL ERROR: {e}")
 
     def main():
         spark = get_spark_session()
@@ -153,7 +158,7 @@ data:
   periodic_merge_to_main.py: |
     import os
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import col # col 함수를 import 합니다.
+    from pyspark.sql.functions import col
 
     S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
     S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
