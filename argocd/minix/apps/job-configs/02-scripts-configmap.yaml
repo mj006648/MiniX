@@ -42,14 +42,16 @@ data:
     def ensure_onboarding_completed(spark, topic_name, topic_df):
         dev_branch_name = f"{topic_name}_dev"
         try:
+            # 브랜치가 존재하는지 직접 확인
             spark.sql(f"USE REFERENCE `{dev_branch_name}` IN nessie")
             print(f"Branch '{dev_branch_name}' already exists. Onboarding previously completed.")
-            return True
+            return True # 이미 존재하면 성공
         except Exception as e:
             if "NessieReferenceNotFoundException" not in str(e):
                 print(f"🔥 ERROR checking branch existence for {topic_name}: {e}")
-                return False
+                return False # 예상치 못한 에러면 실패
 
+        # 브랜치가 존재하지 않으므로, 온보딩을 시작합니다.
         print(f"Branch '{dev_branch_name}' not found. Starting onboarding for topic '{topic_name}'...")
         try:
             json_rdd = topic_df.select(col("value").cast("string")).rdd.map(lambda r: r.value)
@@ -93,11 +95,11 @@ data:
 
             spark.sql(f"CREATE BRANCH `{dev_branch_name}` IN nessie FROM main")
             print(f"✅ Branch '{dev_branch_name}' created successfully.")
-            return True
+            return True # 모든 온보딩이 성공적으로 끝나면 True 반환
             
         except Exception as e:
             print(f"🔥 ERROR during onboarding for topic {topic_name}: {e}")
-            return False
+            return False # 온보딩 중 어떤 에러라도 발생하면 실패
         finally:
             spark.catalog.dropTempView("temp_schema_view_onboarding")
             json_df.unpersist()
