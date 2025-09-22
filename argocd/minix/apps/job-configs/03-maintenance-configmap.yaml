@@ -1,0 +1,105 @@
+# FILE: argocd/minix/apps/job-configs/03-maintenance-configmap.yaml
+# 최종 버전: 스냅샷 만료(expire_snapshots) 로직을 제거하여 데이터의 영구 보존을 보장
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-maintenance-scripts
+  namespace: spark-operator
+data:
+  # --- SCRIPT: Iceberg 테이블 최적화 및 유지보수 (스냅샷 만료 제외) ---
+  daily_table_maintenance.py: |
+    import os
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import col, trim, lower
+    from datetime import datetime, timedelta
+
+    S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
+    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
+    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
+    NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
+    WAREHOUSE_PATH = "s3a://iceberg-data/warehouse"
+
+    def get_spark_session():
+        builder = (
+            SparkSession.builder.appName("TableMaintenance") # 앱 이름 변경
+            .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262")
+            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
+            .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog")
+            .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
+            .config("spark.sql.catalog.nessie.uri", NESSIE_URI)
+            .config("spark.sql.catalog.nessie.warehouse", WAREHOUSE_PATH)
+            .config("spark.sql.catalog.nessie.ref", "main")
+        )
+        if S3_ENDPOINT: builder.config("spark.hadoop.fs.s3a.endpoint", S3_ENDPOINT)
+        if S3_ACCESS_KEY: builder.config("spark.hadoop.fs.s3a.access.key", S3_ACCESS_KEY)
+        if S3_SECRET_KEY: builder.config("spark.hadoop.fs.s3a.secret.key", S3_SECRET_KEY)
+        builder.config("spark.hadoop.fs.s3a.path.style.access", "true")
+        builder.config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
+        builder.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        return builder.getOrCreate()
+
+    def get_all_prod_tables(spark):
+        try:
+            namespaces_df = spark.sql("SHOW NAMESPACES IN nessie")
+            prod_namespaces = [row.namespace for row in namespaces_df.filter(col("namespace").rlike(r".*_prod$")).collect()]
+            
+            all_tables = []
+            for ns in prod_namespaces:
+                tables_df = spark.sql(f"SHOW TABLES IN nessie.`{ns}`")
+                for row in tables_df.collect():
+                    all_tables.append(f"nessie.`{ns}`.`{row.tableName}`")
+            return all_tables
+        except Exception as e:
+            print(f"🔥 ERROR: Could not list production tables. Reason: {e}")
+            return []
+
+    def main():
+        spark = get_spark_session()
+        print("--- Starting Table Maintenance Job ---")
+
+        prod_tables = get_all_prod_tables(spark)
+        if not prod_tables:
+            print("No production tables found to maintain. Exiting.")
+            spark.stop()
+            return
+
+        print(f"Found {len(prod_tables)} production tables to maintain: {prod_tables}")
+
+        older_than_timestamp = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d %H:%M:%S')
+
+        for table in prod_tables:
+            print(f"\n--- Maintaining table: {table} ---")
+            try:
+                # 1. 고아 파일 제거
+                print(f"1. Removing orphan files older than {older_than_timestamp}...")
+                spark.sql(f"CALL nessie.system.remove_orphan_files(table => '{table}', older_than => TIMESTAMP '{older_than_timestamp}', dry_run => false)")
+                print("✅ Orphan files removed.")
+
+                # 2. 매니페스트 최적화
+                print("2. Rewriting manifests...")
+                spark.sql(f"CALL nessie.system.rewrite_manifests(table => '{table}', use_caching => false)")
+                print("✅ Manifests rewritten.")
+
+                # 3. 데이터 파일 압축 (Compaction)
+                print("3. Rewriting data files (compaction) with sort strategy...")
+                spark.sql(f"""
+                    CALL nessie.system.rewrite_data_files(
+                        table => '{table}',
+                        strategy => 'sort',
+                        sort_order => 'timestamp DESC NULLS LAST'
+                    )
+                """)
+                print("✅ Data files compacted.")
+
+                # --- 4. 스냅샷 만료 로직은 여기서 제거됨 ---
+
+            except Exception as e:
+                print(f"🔥 ERROR: Failed to maintain table {table}. Reason: {e}")
+                continue
+
+        print("\n--- Table Maintenance Job Finished ---")
+        spark.stop()
+
+    if __name__ == "__main__":
+        main()

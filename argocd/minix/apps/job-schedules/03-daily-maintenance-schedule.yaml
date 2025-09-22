@@ -1,0 +1,70 @@
+# 유지보수 잡 스케줄
+# FILE: argocd/minix/apps/job-schedules/03-daily-maintenance-schedule.yaml
+# 수정: 스크립트 볼륨이 새로운 유지보수용 ConfigMap을 참조하도록 변경
+
+apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: ScheduledSparkApplication
+metadata:
+  name: daily-table-maintenance
+  namespace: spark-operator
+spec:
+  schedule: "*/5 * * * *"
+  # 하루에 한번schedule: "0 0 * * *"
+  concurrencyPolicy: "Forbid"
+  template:
+    type: Python
+    mode: cluster
+    image: "ich6648/spark-iceberg-nessie-kafka:9.0"
+    imagePullPolicy: Always
+    mainApplicationFile: "local:///mnt/scripts/daily_table_maintenance.py"
+    sparkVersion: "3.5.0"
+    restartPolicy:
+      type: OnFailure
+      onFailureRetries: 3
+      onFailureRetryInterval: 60
+    driver:
+      serviceAccount: spark-sa
+      cores: 1
+      memory: "2g"
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-streaming-spark
+      volumeMounts:
+        - name: scripts-volume
+          mountPath: /mnt/scripts
+      hostAliases:
+      - ip: "10.34.48.242"
+        hostnames:
+        - "b0.minix.local"
+      - ip: "10.34.48.244"
+        hostnames:
+        - "b1.minix.local"
+      - ip: "10.34.48.246"
+        hostnames:
+        - "b2.minix.local"
+    executor:
+      instances: 2
+      cores: 1
+      memory: "2g"
+      envFrom:
+        - secretRef:
+            name: s3-creds-for-streaming-spark
+      volumeMounts:
+        - name: scripts-volume
+          mountPath: /mnt/scripts
+      hostAliases:
+      - ip: "10.34.48.242"
+        hostnames:
+        - "b0.minix.local"
+      - ip: "10.34.48.244"
+        hostnames:
+        - "b1.minix.local"
+      - ip: "10.34.48.246"
+        hostnames:
+        - "b2.minix.local"
+    # [핵심 변경사항]
+    # 사용할 ConfigMap을 명시적으로 지정합니다.
+    volumes:
+      - name: scripts-volume
+        configMap:
+          name: spark-maintenance-scripts # <-- 기존 'spark-scripts'에서 변경
