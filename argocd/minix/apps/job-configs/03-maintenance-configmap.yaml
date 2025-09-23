@@ -37,10 +37,6 @@ data:
         return builder.getOrCreate()
 
     def get_all_prod_tables(spark):
-        """
-        Nessie 카탈로그에서 '_prod'로 끝나는 모든 프로덕션 테이블 목록을 동적으로 가져옵니다.
-        '_untrusted' 테이블은 유지보수 대상에서 제외합니다.
-        """
         print("--- Step 1: Switch to 'main' branch context ---")
         try:
             spark.sql("USE BRANCH main IN nessie")
@@ -60,13 +56,10 @@ data:
 
         print("\n--- Step 3: Filter for namespaces ending with '_prod' (removing backticks) ---")
         try:
-            # 백틱(`) 문자 제거 후 정규식 필터링
             ns_clean_df = namespaces_df.withColumn("ns_clean", regexp_replace(col("namespace"), "`", ""))
             prod_namespaces_df = ns_clean_df.filter(col("ns_clean").rlike(r".*_prod$"))
-            
             print("✅ Filtering successful. Filtered DataFrame contents:")
             prod_namespaces_df.select("namespace", "ns_clean").show(truncate=False)
-
             prod_namespaces_list = [row.ns_clean for row in prod_namespaces_df.collect()]
             print(f"\n✅ Converted to Python list: {prod_namespaces_list}")
         except Exception as e:
@@ -92,7 +85,6 @@ data:
     def main():
         spark = get_spark_session()
         print("--- Starting Daily Table Maintenance Job ---")
-
         prod_tables = get_all_prod_tables(spark)
         if not prod_tables:
             print("No production tables to maintain. Exiting.")
@@ -108,7 +100,8 @@ data:
         older_than_timestamp_str = (date.today() - timedelta(days=3)).strftime('%Y-%m-%d %H:%M:%S')
         yesterday = date.today() - timedelta(days=1)
         day_before_yesterday = date.today() - timedelta(days=2)
-        compaction_where_clause = f"timestamp >= timestamp '{day_before_yesterday}' AND timestamp < timestamp '{yesterday}'"
+        # ❗️❗️❗️ 여기가 수정된 부분입니다 ❗️❗️❗️
+        compaction_where_clause = f"timestamp >= timestamp \"{day_before_yesterday}\" AND timestamp < timestamp \"{yesterday}\""
 
         for table in prod_tables:
             print(f"\n--- Maintaining table: {table} ---")
