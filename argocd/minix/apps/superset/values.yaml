@@ -1,6 +1,5 @@
 # 파일 경로: argocd/minix/apps/superset/values.yaml
-
-# my-values-bitnami.yaml (Hive 연결을 위한 최종 완성본)
+# PostgreSQL 비밀번호를 직접 지정하여 인증 오류를 해결한 최종 버전
 
 global:
   storageClass: "rook-ceph-block"
@@ -59,11 +58,27 @@ worker:
         - name: custom-libs
           mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
 
+# Superset 관리자 계정 설정
 auth:
   secretKey: 'p5gXv7yB9dE3fH2jL4mN6qR8tV0wZxC3bA1sF5uI7oK+Gg=='
   password: "admin"
 
+# Superset의 메타데이터를 저장할 내부 PostgreSQL 설정
 postgresql:
   enabled: true
+  # --- 추가된 부분: PostgreSQL 인증 정보 직접 지정 ---
+  auth:
+    # Superset이 PostgreSQL에 접속할 때 사용할 사용자 이름
+    username: "bn_superset"
+    
+    # Superset이 PostgreSQL에 접속할 때 사용할 비밀번호
+    # 직접 지정하여 랜덤 생성을 방지하고 인증 오류 해결
+    password: "my-superset-db-password"
+    
+    # Superset이 사용할 데이터베이스 이름
+    database: "bitnami_superset"
+  # ----------------------------------------------------
+
+# Celery 백엔드로 사용할 내부 Redis 설정
 redis:
   enabled: true
