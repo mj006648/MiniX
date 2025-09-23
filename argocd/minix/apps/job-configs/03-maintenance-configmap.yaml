@@ -125,14 +125,14 @@ data:
 
                 # 2. 데이터 파일 압축 (binpack)
                 print(f"2. Rewriting data files (binpack) where: {compaction_where_clause}")
-                spark.sql(f\"\"\"
+                spark.sql(f"""
                     CALL system.rewrite_data_files(
                         table => '{table}',
                         strategy => 'binpack',
                         where => '{compaction_where_clause}',
                         options => map('target-file-size-bytes','536870912', 'max-file-group-size-bytes','10737418240')
                     )
-                \"\"\")
+                """)
                 print("✅ Data files compacted.")
 
                 # 3. 매니페스트 최적화
