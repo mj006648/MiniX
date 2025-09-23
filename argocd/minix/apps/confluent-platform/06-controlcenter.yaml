@@ -5,7 +5,7 @@ metadata:
   namespace: confluent
 spec:
   replicas: 1
-  dataVolumeCapacity: 5Gi
+  dataVolumeCapacity: 10Gi
   storageClass:
     name: rook-ceph-block-kafka
   image:

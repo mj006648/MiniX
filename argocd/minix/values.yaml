@@ -93,7 +93,7 @@ applications:
     # Wave 13: Nessie 추가 리소스 (Secret, LoadBalancers)
     # Helm 차트가 관리하지 않는, 우리가 직접 정의한 추가 리소스들을 배포합니다.
     nessie-resources:
-      enabled: true
+      enabled: false
       namespace: nessie-ns
       syncWave: "13" # nessie Helm 차트와 동시에 배포
       source:
@@ -202,7 +202,7 @@ applications:
 
     # Wave 4: PostgreSQL 단일 인스턴스 배포
     postgresql:
-      enabled: true
+      enabled: false
       namespace: postgre
       syncWave: "12"
       source:
@@ -216,7 +216,7 @@ applications:
             - "argocd/minix/apps/postgresql/values.yaml"
     # Helm 차트를 통해 Nessie의 핵심 워크로드(Deployment, 내부 Service 등)를 배포합니다.
     nessie:
-      enabled: true
+      enabled: false
       namespace: nessie-ns
       syncWave: "13" # PostgreSQL 이후에 배포되도록 설정
       source:
