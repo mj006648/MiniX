@@ -1,6 +1,3 @@
-# FILE: argocd/minix/apps/job-configs/03-maintenance-configmap.yaml
-# 최종 버전: 올바른 테이블 탐지 로직, 최적화된 Spark 세션, binpack 압축 전략을 모두 포함한 완전 자동화 스크립트
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,7 +7,7 @@ data:
   daily_table_maintenance.py: |
     import os
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import col
+    from pyspark.sql.functions import col, regexp_replace
     from datetime import date, timedelta
 
     S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
@@ -20,6 +17,12 @@ data:
     WAREHOUSE_PATH = "s3a://iceberg-data/warehouse"
 
     def get_spark_session():
+        """
+        최적화된 Spark 세션을 생성합니다.
+        - Nessie/Iceberg 확장 기능 활성화
+        - SQL 파서 문제를 해결하기 위해 defaultCatalog 설정
+        - S3 연결 정보 설정
+        """
         builder = (
             SparkSession.builder.appName("DailyTableMaintenance")
             .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262")
@@ -41,30 +44,53 @@ data:
 
     def get_all_prod_tables(spark):
         """
-        [핵심 수정] 올바른 네임스페이스와 테이블 이름을 동적으로 가져옵니다.
+        Nessie 카탈로그에서 '_prod'로 끝나는 모든 프로덕션 테이블 목록을 동적으로 가져옵니다.
+        '_untrusted' 테이블은 유지보수 대상에서 제외합니다.
         """
+        print("--- Step 1: Switch to 'main' branch context ---")
         try:
-            # defaultCatalog가 nessie로 설정되어 있으므로 'IN nessie'는 생략 가능
-            namespaces_df = spark.sql("SHOW NAMESPACES")
-            # '_prod'로 끝나는 네임스페이스 필터링
-            prod_namespaces = [row.namespace for row in namespaces_df.filter(col("namespace").rlike(r".*_prod$")).collect()]
-            
+            spark.sql("USE BRANCH main IN nessie")
+            print("✅ Successfully switched to 'main' branch.")
+        except Exception as e:
+            print(f"🔥🔥🔥 FAILURE: Could not switch to main branch. Error: {e}")
+            return []
+
+        print("\n--- Step 2: Show all namespaces on 'main' branch ---")
+        try:
+            namespaces_df = spark.sql("SHOW NAMESPACES IN nessie")
+            print("✅ SHOW NAMESPACES command successful.")
+        except Exception as e:
+            print(f"🔥🔥🔥 FAILURE: Could not list namespaces. Error: {e}")
+            return []
+
+        print("\n--- Step 3: Filter for namespaces ending with '_prod' ---")
+        try:
+            prod_namespaces_df = namespaces_df.filter(col("namespace").rlike(r".*_prod$"))
+            prod_namespaces_list = [row.namespace for row in prod_namespaces_df.collect()]
+            print(f"✅ Converted to Python list: {prod_namespaces_list}")
+        except Exception as e:
+            print(f"🔥🔥🔥 FAILURE: Could not filter namespaces. Error: {e}")
+            return []
+
+        print("\n--- Step 4: Iterate through found namespaces and list tables ---")
+        try:
             all_tables = []
-            for ns in prod_namespaces:
-                tables_df = spark.sql(f"SHOW TABLES IN `{ns}`")
+            for ns in prod_namespaces_list:
+                print(f"\n  - Checking tables inside namespace: {ns}")
+                tables_df = spark.sql(f"SHOW TABLES IN nessie.`{ns}`")
                 for row in tables_df.collect():
-                    # untrusted 테이블은 유지보수 대상에서 제외
                     if not row.tableName.endswith("_untrusted"):
-                        # 항상 FQN(Fully Qualified Name)으로 테이블 식별자 생성
-                        all_tables.append(f"nessie.`{ns}`.`{row.tableName}`")
+                        full_table_name = f"nessie.`{ns}`.`{row.tableName}`"
+                        print(f"    - Found valid table, adding to list: {full_table_name}")
+                        all_tables.append(full_table_name)
             return all_tables
         except Exception as e:
-            print(f"🔥 ERROR: Could not list production tables. Reason: {e}")
+            print(f"🔥🔥🔥 FAILURE: An error occurred while listing tables. Error: {e}")
             return []
 
     def main():
         spark = get_spark_session()
-        print("--- Starting Daily Table Maintenance Job (Final Version) ---")
+        print("--- Starting Daily Table Maintenance Job ---")
 
         prod_tables = get_all_prod_tables(spark)
         if not prod_tables:
@@ -72,36 +98,45 @@ data:
             spark.stop()
             return
 
-        print(f"Found {len(prod_tables)} production tables to maintain: {prod_tables}")
+        print("\n" + "="*50)
+        print("--- FINAL RESULT ---")
+        print(f"✅ Successfully discovered the following production tables:")
+        print(prod_tables)
+        print("="*50)
 
+        # 시간 범위 설정
         older_than_timestamp_str = (date.today() - timedelta(days=3)).strftime('%Y-%m-%d %H:%M:%S')
         yesterday = date.today() - timedelta(days=1)
         day_before_yesterday = date.today() - timedelta(days=2)
-        compaction_where_clause = f"timestamp >= timestamp \"{day_before_yesterday}\" AND timestamp < timestamp \"{yesterday}\""
+        compaction_where_clause = f"timestamp >= timestamp '{day_before_yesterday}' AND timestamp < timestamp '{yesterday}'"
 
         for table in prod_tables:
             print(f"\n--- Maintaining table: {table} ---")
             try:
-                print("0. Ensuring GC is enabled...")
+                # 0. GC 활성화 ( idempotent, 이미 설정되어 있으면 아무 작업 안함 )
+                print("0. Ensuring GC is enabled on the table...")
                 spark.sql(f"ALTER TABLE {table} SET TBLPROPERTIES ('gc.enabled' = 'true')")
                 print("✅ GC is enabled.")
 
+                # 1. 고아 파일 제거
                 print(f"1. Removing orphan files older than {older_than_timestamp_str}...")
                 spark.sql(f"CALL system.remove_orphan_files(table => '{table}', older_than => TIMESTAMP '{older_than_timestamp_str}', dry_run => false)")
                 print("✅ Orphan files removed.")
 
+                # 2. 데이터 파일 압축 (binpack)
                 print(f"2. Rewriting data files (binpack) where: {compaction_where_clause}")
-                spark.sql(f"""
+                spark.sql(f\"\"\"
                     CALL system.rewrite_data_files(
                         table => '{table}',
                         strategy => 'binpack',
                         where => '{compaction_where_clause}',
                         options => map('target-file-size-bytes','536870912', 'max-file-group-size-bytes','10737418240')
                     )
-                """)
+                \"\"\")
                 print("✅ Data files compacted.")
 
-                print("3. Rewriting manifests...")
+                # 3. 매니페스트 최적화
+                print("3. Rewriting manifests as a final step...")
                 spark.sql(f"CALL system.rewrite_manifests(table => '{table}', use_caching => false)")
                 print("✅ Manifests rewritten.")
 
