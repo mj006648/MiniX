@@ -8,7 +8,7 @@ metadata:
   namespace: spark-operator
 spec:
   # 매일 00:00 UTC에 실행 (한국 시간 오전 9시)
-  schedule: "*/5 * * * *"
+  schedule: "5 0 * * *"
   concurrencyPolicy: "Forbid" # 이전 잡이 실행 중이면 다음 잡은 실행하지 않음
   template:
     type: Python
