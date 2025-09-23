@@ -243,3 +243,16 @@ applications:
           releaseName: spark-operator # 릴리즈 이름
           valueFiles:
             - "argocd/minix/apps/spark-operator/values.yaml"
+    superset:
+      enabled: true
+      namespace: superset
+      syncWave: "17" # 다른 모든 인프라가 준비된 후 배포
+      source:
+        type: helm
+        repoURL: https://charts.bitnami.com/bitnami
+        chart: superset
+        targetRevision: "5.0.0"
+        helm:
+          releaseName: superset # Helm 릴리스 이름을 'superset'으로 고정
+          valueFiles:
+            - "argocd/minix/apps/superset/values.yaml"

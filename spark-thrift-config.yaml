@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-thrift-config
+  namespace: spark-operator
+data:
+  spark-defaults.conf: |
+    # --- This file is mounted from a ConfigMap ---
+    spark.sql.catalogImplementation               in-memory
+    spark.sql.extensions                        org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions
+    spark.sql.catalog.nessie                    org.apache.iceberg.spark.SparkCatalog
+    spark.sql.catalog.nessie.catalog-impl       org.apache.iceberg.nessie.NessieCatalog
+    spark.sql.catalog.nessie.warehouse          s3a://iceberg-data/warehouse
+    spark.sql.catalog.nessie.uri                http://nessie.nessie-ns.svc:19120/api/v1
+    spark.hadoop.fs.s3a.endpoint                http://rook-ceph-rgw-iceberg-store.rook-ceph.svc:8080
+    spark.hadoop.fs.s3a.access.key              0H6M0WR0NKACE547SCV9
+    spark.hadoop.fs.s3a.secret.key              M9BqcrkVIEwIxNAmLWg3Rjt2xRbJdYmidkdjNZbQ
+    spark.hadoop.fs.s3a.path.style.access       true
+    spark.hadoop.fs.s3a.connection.ssl.enabled  false
+    spark.hadoop.fs.s3a.impl                    org.apache.hadoop.fs.s3a.S3AFileSystem

@@ -1,0 +1,69 @@
+# 파일 경로: argocd/minix/apps/superset/values.yaml
+
+# my-values-bitnami.yaml (Hive 연결을 위한 최종 완성본)
+
+global:
+  storageClass: "rook-ceph-block"
+
+web:
+  service:
+    type: LoadBalancer
+    ports:
+      http: 8088
+  extraEnvVars:
+    - name: PYTHONPATH
+      value: "/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs"
+  extraVolumes:
+    - name: custom-libs
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: custom-libs
+      mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
+  initContainers:
+    - name: install-drivers
+      image: docker.io/bitnami/python:3.10
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - |
+          pip install --target=/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs PyHive thrift-sasl psycopg2-binary
+      volumeMounts:
+        - name: custom-libs
+          mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
+
+worker:
+  extraEnvVars:
+    - name: PYTHONPATH
+      value: "/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs"
+  extraVolumes:
+    - name: custom-libs
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: custom-libs
+      mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
+  initContainers:
+    - name: install-drivers
+      image: docker.io/bitnami/python:3.10
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - |
+          pip install --target=/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs PyHive thrift-sasl psycopg2-binary
+      volumeMounts:
+        - name: custom-libs
+          mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
+
+auth:
+  secretKey: 'p5gXv7yB9dE3fH2jL4mN6qR8tV0wZxC3bA1sF5uI7oK+Gg=='
+  password: "admin"
+
+postgresql:
+  enabled: true
+redis:
+  enabled: true
