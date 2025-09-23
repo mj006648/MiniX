@@ -17,12 +17,6 @@ data:
     WAREHOUSE_PATH = "s3a://iceberg-data/warehouse"
 
     def get_spark_session():
-        """
-        최적화된 Spark 세션을 생성합니다.
-        - Nessie/Iceberg 확장 기능 활성화
-        - SQL 파서 문제를 해결하기 위해 defaultCatalog 설정
-        - S3 연결 정보 설정
-        """
         builder = (
             SparkSession.builder.appName("DailyTableMaintenance")
             .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.0,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.103.3,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262")
@@ -58,16 +52,23 @@ data:
         print("\n--- Step 2: Show all namespaces on 'main' branch ---")
         try:
             namespaces_df = spark.sql("SHOW NAMESPACES IN nessie")
-            print("✅ SHOW NAMESPACES command successful.")
+            print("✅ SHOW NAMESPACES command successful. DataFrame contents:")
+            namespaces_df.show(truncate=False)
         except Exception as e:
             print(f"🔥🔥🔥 FAILURE: Could not list namespaces. Error: {e}")
             return []
 
-        print("\n--- Step 3: Filter for namespaces ending with '_prod' ---")
+        print("\n--- Step 3: Filter for namespaces ending with '_prod' (removing backticks) ---")
         try:
-            prod_namespaces_df = namespaces_df.filter(col("namespace").rlike(r".*_prod$"))
-            prod_namespaces_list = [row.namespace for row in prod_namespaces_df.collect()]
-            print(f"✅ Converted to Python list: {prod_namespaces_list}")
+            # 백틱(`) 문자 제거 후 정규식 필터링
+            ns_clean_df = namespaces_df.withColumn("ns_clean", regexp_replace(col("namespace"), "`", ""))
+            prod_namespaces_df = ns_clean_df.filter(col("ns_clean").rlike(r".*_prod$"))
+            
+            print("✅ Filtering successful. Filtered DataFrame contents:")
+            prod_namespaces_df.select("namespace", "ns_clean").show(truncate=False)
+
+            prod_namespaces_list = [row.ns_clean for row in prod_namespaces_df.collect()]
+            print(f"\n✅ Converted to Python list: {prod_namespaces_list}")
         except Exception as e:
             print(f"🔥🔥🔥 FAILURE: Could not filter namespaces. Error: {e}")
             return []
@@ -104,7 +105,6 @@ data:
         print(prod_tables)
         print("="*50)
 
-        # 시간 범위 설정
         older_than_timestamp_str = (date.today() - timedelta(days=3)).strftime('%Y-%m-%d %H:%M:%S')
         yesterday = date.today() - timedelta(days=1)
         day_before_yesterday = date.today() - timedelta(days=2)
@@ -113,17 +113,14 @@ data:
         for table in prod_tables:
             print(f"\n--- Maintaining table: {table} ---")
             try:
-                # 0. GC 활성화 ( idempotent, 이미 설정되어 있으면 아무 작업 안함 )
                 print("0. Ensuring GC is enabled on the table...")
                 spark.sql(f"ALTER TABLE {table} SET TBLPROPERTIES ('gc.enabled' = 'true')")
                 print("✅ GC is enabled.")
 
-                # 1. 고아 파일 제거
                 print(f"1. Removing orphan files older than {older_than_timestamp_str}...")
                 spark.sql(f"CALL system.remove_orphan_files(table => '{table}', older_than => TIMESTAMP '{older_than_timestamp_str}', dry_run => false)")
                 print("✅ Orphan files removed.")
 
-                # 2. 데이터 파일 압축 (binpack)
                 print(f"2. Rewriting data files (binpack) where: {compaction_where_clause}")
                 spark.sql(f"""
                     CALL system.rewrite_data_files(
@@ -135,7 +132,6 @@ data:
                 """)
                 print("✅ Data files compacted.")
 
-                # 3. 매니페스트 최적화
                 print("3. Rewriting manifests as a final step...")
                 spark.sql(f"CALL system.rewrite_manifests(table => '{table}', use_caching => false)")
                 print("✅ Manifests rewritten.")
