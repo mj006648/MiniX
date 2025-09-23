@@ -1,84 +1,46 @@
-# 파일 경로: argocd/minix/apps/superset/values.yaml
-# PostgreSQL 비밀번호를 직접 지정하여 인증 오류를 해결한 최종 버전
+# Superset 공식 차트를 위한 최소 설정 values.yaml
 
-global:
-  storageClass: "rook-ceph-block"
+# 1. 외부 접속을 위해 서비스 타입을 LoadBalancer로 변경
+service:
+  type: LoadBalancer
+  port: 8088
 
-web:
-  service:
-    type: LoadBalancer
-    ports:
-      http: 8088
-  extraEnvVars:
-    - name: PYTHONPATH
-      value: "/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs"
-  extraVolumes:
-    - name: custom-libs
-      emptyDir: {}
-  extraVolumeMounts:
-    - name: custom-libs
-      mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
-  initContainers:
-    - name: install-drivers
-      image: docker.io/bitnami/python:3.10
-      imagePullPolicy: IfNotPresent
-      securityContext:
-        runAsUser: 0
-      command:
-        - "/bin/sh"
-        - "-c"
-        - |
-          pip install --target=/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs PyHive thrift-sasl psycopg2-binary
-      volumeMounts:
-        - name: custom-libs
-          mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
+# 2. (필수) 보안을 위한 SECRET_KEY 설정. 반드시 복잡한 값으로 변경하세요.
+# 터미널에서 openssl rand -base64 42 명령어로 새 키를 생성하여 붙여넣으세요.
+extraSecretEnv:
+  SUPERSET_SECRET_KEY: 'p5gXv7yB9dE3fH2jL4mN6qR8tV0wZxC3bA1sF5uI7oK+Gg=='
 
-worker:
-  extraEnvVars:
-    - name: PYTHONPATH
-      value: "/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs"
-  extraVolumes:
-    - name: custom-libs
-      emptyDir: {}
-  extraVolumeMounts:
-    - name: custom-libs
-      mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
-  initContainers:
-    - name: install-drivers
-      image: docker.io/bitnami/python:3.10
-      imagePullPolicy: IfNotPresent
-      securityContext:
-        runAsUser: 0
-      command:
-        - "/bin/sh"
-        - "-c"
-        - |
-          pip install --target=/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs PyHive thrift-sasl psycopg2-binary
-      volumeMounts:
-        - name: custom-libs
-          mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
+# 3. 초기 관리자 계정 설정 (여기의 password가 로그인 비밀번호가 됩니다)
+init:
+  enabled: true
+  createAdmin: true
+  adminUser:
+    username: admin
+    firstname: Superset
+    lastname: Admin
+    email: admin@superset.com
+    password: admin # 로그인 시 사용할 비밀번호
 
-# Superset 관리자 계정 설정
-auth:
-  secretKey: 'p5gXv7yB9dE3fH2jL4mN6qR8tV0wZxC3bA1sF5uI7oK+Gg=='
-  password: "admin"
-
-# Superset의 메타데이터를 저장할 내부 PostgreSQL 설정
+# 4. 데이터베이스(PostgreSQL) 설정
 postgresql:
+  # Superset이 사용할 내부 PostgreSQL을 활성화합니다.
   enabled: true
-  # --- 추가된 부분: PostgreSQL 인증 정보 직접 지정 ---
+  primary:
+    persistence:
+      enabled: true
+      # 사용자의 환경에 맞는 스토리지 클래스를 지정합니다.
+      storageClass: "rook-ceph-block"
   auth:
-    # Superset이 PostgreSQL에 접속할 때 사용할 사용자 이름
-    username: "bn_superset"
-    
-    # Superset이 PostgreSQL에 접속할 때 사용할 비밀번호
-    # 직접 지정하여 랜덤 생성을 방지하고 인증 오류 해결
-    password: "my-superset-db-password"
-    
-    # Superset이 사용할 데이터베이스 이름
-    database: "bitnami_superset"
-  # ----------------------------------------------------
+    # PostgreSQL에 접속할 유저/비밀번호/데이터베이스 이름입니다.
+    # Superset 내부용이므로 기본값을 사용해도 무방합니다.
+    username: superset
+    password: superset
+    database: superset
 
-# Celery 백엔드로 사용할 내부 Redis 설정
+# 5. 캐시/메시지큐(Redis) 설정
 redis:
+  # Superset이 사용할 내부 Redis를 활성화합니다.
   enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
