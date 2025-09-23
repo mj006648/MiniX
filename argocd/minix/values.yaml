@@ -202,7 +202,7 @@ applications:
 
     # Wave 4: PostgreSQL 단일 인스턴스 배포
     postgresql:
-      enabled: false
+      enabled: true
       namespace: postgre
       syncWave: "12"
       source:
