@@ -28,7 +28,7 @@ applications:
 
     # Grafana Secret을 가장 먼저 배포
     grafana-resources:
-      enabled: true
+      enabled: false
       namespace: monitoring
       syncWave: "5" # Prometheus보다 먼저 실행되어야 함
       source:
@@ -135,7 +135,7 @@ applications:
 
     # Prometheus 스택 배포
     prometheus:
-      enabled: true
+      enabled: false
       namespace: monitoring
       syncWave: "6" # Secret이 준비된 후 실행
       source:
@@ -148,7 +148,7 @@ applications:
             - "argocd/minix/apps/prometheus/values.yaml"
     # Grafana 배포
     grafana:
-      enabled: true
+      enabled: false
       namespace: monitoring
       syncWave: "7" # Prometheus가 준비된 후 실행되도록 순서를 조정합니다.
       source:

@@ -1,16 +1,16 @@
-# Superset 공식 차트를 위한 최소 설정 values.yaml
+# Superset 공식 차트 + Hive 드라이버 + Redis 인증 문제 해결을 위한 최종 values.yaml
 
 # 1. 외부 접속을 위해 서비스 타입을 LoadBalancer로 변경
 service:
   type: LoadBalancer
   port: 8088
 
-# 2. (필수) 보안을 위한 SECRET_KEY 설정. 반드시 복잡한 값으로 변경하세요.
-# 터미널에서 openssl rand -base64 42 명령어로 새 키를 생성하여 붙여넣으세요.
+# 2. (필수) 보안을 위한 SECRET_KEY 설정
+# 터미널에서 openssl rand -base64 42 명령어로 새 키를 생성하여 붙여넣는 것을 권장합니다.
 extraSecretEnv:
   SUPERSET_SECRET_KEY: 'p5gXv7yB9dE3fH2jL4mN6qR8tV0wZxC3bA1sF5uI7oK+Gg=='
 
-# 3. 초기 관리자 계정 설정 (여기의 password가 로그인 비밀번호가 됩니다)
+# 3. 초기 관리자 계정 설정
 init:
   enabled: true
   createAdmin: true
@@ -32,15 +32,25 @@ postgresql:
       storageClass: "rook-ceph-block"
   auth:
     # PostgreSQL에 접속할 유저/비밀번호/데이터베이스 이름입니다.
-    # Superset 내부용이므로 기본값을 사용해도 무방합니다.
     username: superset
     password: superset
     database: superset
 
-# 5. 캐시/메시지큐(Redis) 설정
+# 5. 캐시/메시지큐(Redis) 설정 (오류 수정)
 redis:
   # Superset이 사용할 내부 Redis를 활성화합니다.
   enabled: true
   architecture: standalone
+  # --- 수정된 부분 ---
+  # auth.enabled를 true로 설정하여 'superset-redis' 시크릿이 생성되도록 합니다.
   auth:
-    enabled: false
+    enabled: true
+    password: "a-secure-redis-password" # 임의의 비밀번호 설정
+  # --------------------
+
+# 6. (Hive 드라이버 설치 추가) 컨테이너 시작 시 필요한 라이브러리를 설치하는 스크립트
+bootstrapScript: |
+  #!/bin/bash
+  # psycopg2-binary는 PostgreSQL 연결에 필요하며 기본 이미지에 없을 수 있으므로 함께 설치
+  # PyHive와 thrift-sasl은 Hive 연결에 필요
+  pip install psycopg2-binary PyHive thrift-sasl
