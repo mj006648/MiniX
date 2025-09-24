@@ -1,31 +1,31 @@
-# FILE: argocd/minix/apps/trino/values.yaml
-# Trino Helm 차트를 위한 상세 설정 파일
+# FILE: ~/my-trino-values.yaml
+# S3 클라이언트 초기화를 위해 필수적인 리전(Region) 정보를 추가한 최종 버전
 
-# Trino 코디네이터와 워커의 기본 설정
 server:
-  workers: 2 # 워커 파드 수. 클러스터 자원 상황에 맞게 조절 가능합니다.
+  workers: 2
 
-# Trino UI 및 JDBC 접속을 위한 서비스 설정
 service:
-  type: LoadBalancer # 외부에서 직접 접속하여 테스트할 수 있도록 LoadBalancer로 설정
+  type: LoadBalancer
   port: 8080
 
-# [핵심] Trino에 Iceberg/Nessie 카탈로그를 추가하는 부분
-# 이 설정을 통해 Trino가 데이터 레이크를 조회할 수 있게 됩니다.
-additionalCatalogs:
-  # 카탈로그 이름. Superset에서 이 이름을 사용하여 데이터에 접근하게 됩니다.
+catalogs:
   iceberg: |
-    # 커넥터 종류 지정
     connector.name=iceberg
-    # 카탈로그 타입은 Nessie로 지정
     iceberg.catalog.type=nessie
-    # Nessie 서버의 쿠버네티스 내부 서비스 주소 (사용자 환경 정보 기반)
-    nessie.uri=http://nessie.nessie-ns.svc:19120/api/v1
-    # 기본으로 조회할 Nessie 브랜치 (프로덕션 데이터가 있는 main 브랜치)
-    iceberg.nessie.ref=main
-    # S3 스토리지(Rook-Ceph RGW) 설정 (사용자 환경 정보 기반)
-    hive.s3.endpoint=http://rook-ceph-rgw-iceberg-store.rook-ceph.svc:8080
-    hive.s3.aws.access-key=0H6M0WR0NKACE547SCV9
-    hive.s3.aws.secret-key=M9BqcrkVIEwIxNAmLWg3Rjt2xRbJdYmidkdjNZbQ
-    hive.s3.path-style-access=true
-    hive.s3.ssl.enabled=false
+    iceberg.nessie-catalog.uri=http://nessie.nessie-ns.svc:19120/api/v1
+    iceberg.nessie-catalog.ref=main
+    iceberg.nessie-catalog.default-warehouse-dir=s3a://iceberg-data/warehouse
+
+    # Native S3 파일 시스템 활성화
+    fs.native-s3.enabled=true
+
+    # Native S3 속성
+    s3.endpoint=http://rook-ceph-rgw-iceberg-store.rook-ceph.svc:8080
+    s3.aws-access-key=0H6M0WR0NKACE547SCV9
+    s3.aws-secret-key=M9BqcrkVIEwIxNAmLWg3Rjt2xRbJdYmidkdjNZbQ
+    s3.path-style-access=true
+    
+    # [최종 수정] S3 클라이언트 초기화를 위한 리전 정보 추가
+    # Rook-Ceph는 특정 리전에 종속되지 않으므로, 임의의 유효한 리전 값을 넣어줍니다.
+    s3.region=us-east-1
+
