@@ -256,3 +256,17 @@ applications:
           releaseName: superset # Helm 릴리스 이름을 'superset'으로 고정
           valueFiles:
             - "argocd/minix/apps/superset/values.yaml"
+    trino:
+      enabled: true
+      namespace: trino # Trino 컴포넌트를 설치할 네임스페이스
+      syncWave: "18"
+      source:
+        type: helm
+        repoURL: https://trinodb.github.io/charts/  # Trino 공식 Helm 리포지토리
+        chart: trino
+        targetRevision: "1.40.0"
+        helm:
+          releaseName: trino
+          valueFiles:
+            # 1단계에서 생성한 상세 설정 파일의 경로를 지정합니다.
+            - "argocd/minix/apps/trino/values.yaml"
