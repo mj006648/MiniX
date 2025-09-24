@@ -26,8 +26,8 @@ web:
         - "/bin/sh"
         - "-c"
         - |
-          # PyHive와 함께 thrift-sasl 패키지를 설치
-          pip install --target=/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs PyHive thrift-sasl psycopg2-binary
+          # PyHive와 함께 thrift-sasl 패키지를 설치 (trino 패키지 추가됨)
+          pip install --target=/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs PyHive thrift-sasl psycopg2-binary trino
       volumeMounts:
         - name: custom-libs
           mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
@@ -52,8 +52,8 @@ worker:
         - "/bin/sh"
         - "-c"
         - |
-          # Worker에도 동일하게 thrift-sasl 패키지를 설치
-          pip install --target=/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs PyHive thrift-sasl psycopg2-binary
+          # Worker에도 동일하게 thrift-sasl 패키지를 설치 (trino 패키지 추가됨)
+          pip install --target=/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs PyHive thrift-sasl psycopg2-binary trino
       volumeMounts:
         - name: custom-libs
           mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
@@ -68,4 +68,3 @@ postgresql:
   enabled: true
 redis:
   enabled: true
-
