@@ -257,7 +257,7 @@ applications:
           valueFiles:
             - "argocd/minix/apps/superset/values.yaml"
     trino:
-      enabled: true
+      enabled: false
       namespace: trino # Trino 컴포넌트를 설치할 네임스페이스
       syncWave: "18"
       source:
