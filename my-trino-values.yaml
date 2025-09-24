@@ -1,5 +1,5 @@
 # FILE: ~/my-trino-values.yaml
-# Trino 공식 문서를 기반으로 S3 접속 키를 최종 수정한 버전
+# S3 클라이언트 초기화를 위해 필수적인 리전(Region) 정보를 추가한 최종 버전
 
 server:
   workers: 2
@@ -16,9 +16,15 @@ catalogs:
     iceberg.nessie-catalog.ref=main
     iceberg.nessie-catalog.default-warehouse-dir=s3a://iceberg-data/warehouse
 
-    # [최종 수정] Trino Hive S3 커넥터의 공식 문서에 명시된 정확한 키를 사용합니다.
-    hive.s3.endpoint=http://rook-ceph-rgw-iceberg-store.rook-ceph.svc:8080
-    hive.s3.aws.access-key=0H6M0WR0NKACE547SCV9
-    hive.s3.aws.secret-key=M9BqcrkVIEwIxNAmLWg3Rjt2xRbJdYmidkdjNZbQ
-    hive.s3.path-style-access=true
-    hive.s3.ssl.enabled=false
+    # Native S3 파일 시스템 활성화
+    fs.native-s3.enabled=true
+
+    # Native S3 속성
+    s3.endpoint=http://rook-ceph-rgw-iceberg-store.rook-ceph.svc:8080
+    s3.aws-access-key=0H6M0WR0NKACE547SCV9
+    s3.aws-secret-key=M9BqcrkVIEwIxNAmLWg3Rjt2xRbJdYmidkdjNZbQ
+    s3.path-style-access=true
+    
+    # [최종 수정] S3 클라이언트 초기화를 위한 리전 정보 추가
+    # Rook-Ceph는 특정 리전에 종속되지 않으므로, 임의의 유효한 리전 값을 넣어줍니다.
+    s3.region=us-east-1
