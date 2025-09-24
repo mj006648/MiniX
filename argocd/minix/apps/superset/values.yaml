@@ -1,5 +1,3 @@
-# my-values-bitnami.yaml (Hive 연결을 위한 최종 완성본)
-
 global:
   storageClass: "rook-ceph-block"
 
@@ -60,8 +58,10 @@ worker:
           mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
 
 auth:
-  secretKey: 'p5gXv7yB9dE3fH2jL4mN6qR8tV0wZxC3bA1sF5uI7oK+Gg=='
+  # 사용자 이름과 비밀번호를 명시적으로 설정
+  username: "admin"
   password: "admin"
+  secretKey: 'p5gXv7yB9dE3fH2jL4mN6qR8tV0wZxC3bA1sF5uI7oK+Gg=='
 
 postgresql:
   enabled: true
