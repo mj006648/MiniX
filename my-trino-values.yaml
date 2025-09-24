@@ -1,3 +1,6 @@
+# FILE: ~/my-trino-values.yaml
+# Trino 공식 문서를 기반으로 S3 접속 키를 최종 수정한 버전
+
 server:
   workers: 2
 
@@ -13,9 +16,9 @@ catalogs:
     iceberg.nessie-catalog.ref=main
     iceberg.nessie-catalog.default-warehouse-dir=s3a://iceberg-data/warehouse
 
-    # [수정됨] S3 접속 키에 'aws'를 정확하게 추가합니다.
+    # [최종 수정] Trino Hive S3 커넥터의 공식 문서에 명시된 정확한 키를 사용합니다.
     hive.s3.endpoint=http://rook-ceph-rgw-iceberg-store.rook-ceph.svc:8080
-    hive.s3.aws-access-key=0H6M0WR0NKACE547SCV9
-    hive.s3.aws-secret-key=M9BqcrkVIEwIxNAmLWg3Rjt2xRbJdYmidkdjNZbQ
+    hive.s3.aws.access-key=0H6M0WR0NKACE547SCV9
+    hive.s3.aws.secret-key=M9BqcrkVIEwIxNAmLWg3Rjt2xRbJdYmidkdjNZbQ
     hive.s3.path-style-access=true
     hive.s3.ssl.enabled=false

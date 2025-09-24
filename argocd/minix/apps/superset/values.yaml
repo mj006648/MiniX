@@ -1,3 +1,4 @@
+# 파일 경로: argocd/minix/apps/superset/values.yaml
 global:
   storageClass: "rook-ceph-block"
 
@@ -6,6 +7,30 @@ web:
     type: LoadBalancer
     ports:
       http: 8088
+  extraEnvVars:
+    - name: PYTHONPATH
+      value: "/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs"
+  extraVolumes:
+    - name: custom-libs
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: custom-libs
+      mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
+  initContainers:
+    - name: install-drivers
+      image: docker.io/bitnami/python:3.10
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        runAsUser: 0
+      command:
+        - "/bin/sh"
+        - "-c"
+        - |
+          # PyHive와 함께 thrift-sasl 패키지를 설치
+          pip install --target=/opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs PyHive thrift-sasl psycopg2-binary
+      volumeMounts:
+        - name: custom-libs
+          mountPath: /opt/bitnami/superset/venv/lib/python3.10/site-packages/custom_libs
 
 auth:
   # 사용자 이름과 비밀번호를 명시적으로 설정
@@ -17,3 +42,4 @@ postgresql:
   enabled: true
 redis:
   enabled: true
+
