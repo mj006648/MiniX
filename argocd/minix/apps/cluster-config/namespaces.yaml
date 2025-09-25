@@ -80,13 +80,3 @@ metadata:
         kubernetes.io/metadata.name: trino
     name: trino
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-    annotations:
-        "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
-    labels:
-        kubernetes.io/metadata.name: superset
-    name: superset
----
-
