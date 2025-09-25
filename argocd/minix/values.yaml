@@ -243,8 +243,11 @@ applications:
           releaseName: spark-operator # 릴리즈 이름
           valueFiles:
             - "argocd/minix/apps/spark-operator/values.yaml"
+          values: |
+            cleanupJob:
+              enabled: false
     superset:
-      enabled: false
+      enabled: true
       namespace: superset
       syncWave: "17" # 다른 모든 인프라가 준비된 후 배포
       source:
