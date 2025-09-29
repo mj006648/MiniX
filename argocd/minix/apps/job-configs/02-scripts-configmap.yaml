@@ -18,7 +18,7 @@ data:
     S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
     S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
     NESSIE_URI = "http://nessie.nessie-ns.svc:19120/api/v1"
-    KAFKA_BOOTSTRAP_SERVERS = "10.34.48.245:9092"
+    KAFKA_BOOTSTRAP_SERVERS = "10.34.48.100:32100"
     WAREHOUSE_PATH = "s3a://iceberg-data/warehouse"
 
     def get_spark_session():
@@ -156,7 +156,7 @@ data:
     def main():
         spark = get_spark_session()
         
-        kafka_df = spark.readStream.format("kafka").option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS).option("subscribePattern", "parking-.*").option("startingOffsets", "earliest").load()
+        kafka_df = spark.readStream.format("kafka").option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS).option("subscribePattern", "iceberg-.*").option("startingOffsets", "earliest").load()
         
         query = (
             kafka_df.writeStream
@@ -266,3 +266,4 @@ data:
 
     if __name__ == "__main__":
         main()
+

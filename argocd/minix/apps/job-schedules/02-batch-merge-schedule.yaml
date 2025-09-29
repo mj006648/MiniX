@@ -30,16 +30,6 @@ spec:
       volumeMounts:
         - name: scripts-volume
           mountPath: /mnt/scripts
-      hostAliases:
-      - ip: "10.34.48.242"
-        hostnames:
-        - "b0.minix.local"
-      - ip: "10.34.48.244"
-        hostnames:
-        - "b1.minix.local"
-      - ip: "10.34.48.246"
-        hostnames:
-        - "b2.minix.local"
     executor:
       instances: 2
       cores: 1
@@ -50,17 +40,8 @@ spec:
       volumeMounts:
         - name: scripts-volume
           mountPath: /mnt/scripts
-      hostAliases:
-      - ip: "10.34.48.242"
-        hostnames:
-        - "b0.minix.local"
-      - ip: "10.34.48.244"
-        hostnames:
-        - "b1.minix.local"
-      - ip: "10.34.48.246"
-        hostnames:
-        - "b2.minix.local"
     volumes:
       - name: scripts-volume
         configMap:
           name: spark-scripts
+
