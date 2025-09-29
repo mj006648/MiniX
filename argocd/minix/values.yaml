@@ -247,7 +247,7 @@ applications:
             cleanupJob:
               enabled: false
     superset:
-      enabled: false
+      enabled: true
       namespace: superset
       syncWave: "17" # 다른 모든 인프라가 준비된 후 배포
       source:
