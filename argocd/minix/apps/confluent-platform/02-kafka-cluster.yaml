@@ -21,9 +21,10 @@ spec:
     external:
       name: EXTERNAL
       externalAccess:
-        type: loadBalancer
-        loadBalancer:
-          domain: minix.local
+        type: nodePort
+        nodePort:
+          # 클라이언트가 최초 접속(bootstrap)할 때 사용할 포트를 지정합니다.
+          bootstrapPort: 32092
   podTemplate:
     resources:
       requests:
@@ -65,11 +66,11 @@ spec:
       - "confluent.metrics.reporter.enable=true"
       - "confluent.metrics.reporter.topic.partitions=3"
       - "confluent.metrics.reporter.topic.replication.factor=1"
-      - "confluent.metrics.reporter.topic.retention.ms=1800000"       # [변경] 1시간 -> 30분으로 단축
-      - "confluent.metrics.reporter.topic.retention.bytes=1073741824" # [추가] 메트릭 토픽 전체 크기를 1GB로 제한
+      - "confluent.metrics.reporter.topic.retention.ms=1800000"       
+      - "confluent.metrics.reporter.topic.retention.bytes=1073741824" 
       - "confluent.metrics.reporter.publish.ms=15000"
       
       # ★★★ 불필요한 기능 비활성화 (텔레메트리 설정 강화) ★★★
       - "confluent.telemetry.enable=false"
-      - "confluent.reporters.telemetry.auto.enable=false" # [추가] 텔레메트리 리포터 자동 생성을 명시적으로 비활성화
+      - "confluent.reporters.telemetry.auto.enable=false" 
       - "confluent.self.balancing.enable=false"
