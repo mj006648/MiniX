@@ -8,11 +8,11 @@ spec:
   metadataPool:
     failureDomain: osd
     replicated:
-      size: 1
+      size: 3
   dataPool:
     failureDomain: osd
     replicated:
-      size: 1
+      size: 3
   gateway:
     type: s3
     replicas: 1
