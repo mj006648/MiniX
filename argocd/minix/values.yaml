@@ -273,3 +273,10 @@ applications:
           valueFiles:
             # 1단계에서 생성한 상세 설정 파일의 경로를 지정합니다.
             - "argocd/minix/apps/trino/values.yaml"
+
+    ingestion: # <-- 앱 이름 확인
+      enabled: true
+      namespace: rook-ceph
+      syncWave: "19"
+      source:
+        path: "argocd/minix/apps/ingestion" # <-- 경로 확인
