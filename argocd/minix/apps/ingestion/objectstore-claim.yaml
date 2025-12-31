@@ -6,11 +6,11 @@ metadata:
   namespace: rook-ceph
 spec:
   metadataPool:
-    failureDomain: osd
+    failureDomain: host
     replicated:
       size: 3
   dataPool:
-    failureDomain: osd
+    failureDomain: host
     replicated:
       size: 3
   gateway:
