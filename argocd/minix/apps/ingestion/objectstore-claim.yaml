@@ -8,7 +8,7 @@ spec:
   metadataPool:
     failureDomain: osd
     replicated:
-      size: 
+      size: 1
   dataPool:
     failureDomain: osd
     replicated:
