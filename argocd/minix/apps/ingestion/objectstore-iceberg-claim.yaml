@@ -2,7 +2,7 @@
 apiVersion: ceph.rook.io/v1
 kind: CephObjectStore
 metadata:
-  name: iceberg-store
+  name: iceberg2-store
   namespace: rook-ceph
 spec:
   metadataPool:

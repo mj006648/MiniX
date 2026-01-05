@@ -3,14 +3,14 @@ apiVersion: v1
 kind: Service
 metadata:
   # 'rook-ceph'의 'rgw' 컴포넌트 중 'chang-store' 인스턴스를 'external'로 노출시킨다
-  name: rook-ceph-rgw-iceberg-store-external
+  name: rook-ceph-rgw-iceberg2-store-external
   namespace: rook-ceph
 spec:
   type: LoadBalancer
   # 이 selector는 'ingestion-store'가 생성한 RGW Pod을 정확히 찾아내야 합니다.
   selector:
     app: rook-ceph-rgw
-    rook_object_store: iceberg-store
+    rook_object_store: iceberg2-store
   ports:
     - name: http-s3
       # 외부 로드밸런서 IP에서 접근할 표준 HTTP 포트
