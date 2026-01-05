@@ -1,0 +1,11 @@
+# ingestion/bucket-iceberg-claim.yaml
+
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  # S3 클라이언트가 참조할 이름으로 통일합니다.
+  name: iceberg-bucket 
+  namespace: rook-ceph
+spec:
+  storageClassName: iceberg-sc
+  bucketName: iceberg-data
