@@ -26,7 +26,7 @@ resources:
 
 # 4. 서비스 설정 (에이전트가 내부 주소 http://ollama:11434 로 접근)
 service:
-  type: ClusterIP
+  type: LoadBalancer
   port: 11434
 
 # 5. 프로브 설정 (모델 다운로드 시간이 길어질 수 있으므로 여유 있게 설정)

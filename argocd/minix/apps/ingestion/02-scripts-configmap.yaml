@@ -1,0 +1,173 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trident-scripts
+  namespace: spark-operator
+data:
+  ingest_config.json: |
+    {
+      "jobs": [
+        {
+          "job_id": "camera_front_ingestion",
+          "description": "전방 카메라 데이터 수집 작업 (이미지 데이터 및 기상 정보 포함)",
+          "cluster_id": "MiniX-Cluster-01",
+          "target_table": "nessie.sensor_data.camera_front",
+          "partition_cols": ["date"],
+          "source_path": "s3a://ingestion-data/",
+          "source_conn": {
+            "endpoint": "http://10.34.48.240",
+            "access_key": "0ESVUZYJOJE0VW3V79BV",
+            "secret_key": "yV2Bd6G0POXMuHTprLBhGeEKqBfSjttWREXTAvWj",
+            "bucket_name": "ingestion-data"
+          },
+          "format": "binaryFile"
+        }
+      ]
+    }
+
+  generic_ingest.py: |
+    import os
+    import json
+    import sys
+    import requests
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import col, lit, current_timestamp, substring_index, regexp_extract, from_utc_timestamp
+    from pymilvus import connections, Collection, utility, DataType, FieldSchema, CollectionSchema
+
+    # --- [AI 모듈] Ollama & Milvus 연동 ---
+    
+    def get_embedding(text):
+        """Ollama BGE-M3 모델을 사용하여 임베딩 생성"""
+        OLLAMA_URL = "http://ollama.ollama.svc.cluster.local:11434/api/embeddings"
+        try:
+            res = requests.post(OLLAMA_URL, json={"model": "bge-m3", "prompt": text}, timeout=30)
+            return res.json()['embedding']
+        except Exception as e:
+            print(f">>> [AI ERROR] Embedding failed: {e}")
+            return None
+
+    def upsert_to_milvus(table_name, cluster_id, rich_context, vector):
+        """Milvus에 지능형 카탈로그 저장"""
+        MILVUS_HOST = "milvus.milvus.svc.cluster.local"
+        try:
+            connections.connect("default", host=MILVUS_HOST, port="19530")
+            
+            # 컬렉션이 없으면 생성
+            if not utility.has_collection("data_sense_catalog"):
+                fields = [
+                    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+                    FieldSchema(name="table_name", dtype=DataType.VARCHAR, max_length=255),
+                    FieldSchema(name="cluster_id", dtype=DataType.VARCHAR, max_length=100),
+                    FieldSchema(name="rich_context", dtype=DataType.VARCHAR, max_length=3500),
+                    FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=1024)
+                ]
+                schema = CollectionSchema(fields, "Intelligent Data Catalog for MiniX")
+                col = Collection("data_sense_catalog", schema)
+                # 검색 성능을 위한 HNSW 인덱스 생성
+                index_params = {"index_type": "HNSW", "metric_type": "L2", "params": {"M": 8, "efConstruction": 64}}
+                col.create_index("vector", index_params)
+            
+            col = Collection("data_sense_catalog")
+            col.insert([[table_name], [cluster_id], [rich_context], [vector]])
+            col.flush()
+            print(f">>> [MILVUS] Successfully indexed {table_name}")
+        except Exception as e:
+            print(f">>> [MILVUS ERROR] {e}")
+
+    # --- [Spark 메인] ---
+
+    def main():
+        print(">>> [INIT] Starting Intelligent Ingestion Engine...")
+        
+        try:
+            with open("/mnt/scripts/ingest_config.json", "r") as f:
+                config = json.load(f)
+        except Exception as e:
+            print(f">>> [ERROR] Config Load Failed: {str(e)}")
+            sys.exit(1)
+
+        # 환경 변수에서 242번 창고(Iceberg 목적지) 정보 가져오기
+        ICE_EP = os.environ.get("ICEBERG_ENDPOINT")
+        ICE_AK = os.environ.get("ICEBERG_ACCESS_KEY")
+        ICE_SK = os.environ.get("ICEBERG_SECRET_KEY")
+
+        # Spark 세션 빌더 (Nessie, Iceberg 설정 포함)
+        builder = SparkSession.builder \
+            .config("spark.sql.session.timeZone", "Asia/Seoul") \
+            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions") \
+            .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog") \
+            .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog") \
+            .config("spark.sql.catalog.nessie.uri", "http://nessie.nessie-ns.svc.cluster.local:19120/api/v1") \
+            .config("spark.sql.catalog.nessie.ref", "main") \
+            .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg2-data/warehouse") \
+            .config("spark.sql.catalog.nessie.io-impl", "org.apache.iceberg.hadoop.HadoopFileIO") \
+            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+            .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+            .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
+            .config("spark.hadoop.fs.s3a.bucket.iceberg2-data.endpoint", ICE_EP) \
+            .config("spark.hadoop.fs.s3a.bucket.iceberg2-data.access.key", ICE_AK) \
+            .config("spark.hadoop.fs.s3a.bucket.iceberg2-data.secret.key", ICE_SK)
+
+        # 작업별 소스 S3(240, 241 등) 설정 동적 추가
+        active_jobs = config.get('jobs', [])
+        for job in active_jobs:
+            conn = job.get('source_conn', {})
+            bucket = conn.get('bucket_name')
+            if bucket:
+                builder.config(f"spark.hadoop.fs.s3a.bucket.{bucket}.endpoint", conn.get('endpoint'))
+                builder.config(f"spark.hadoop.fs.s3a.bucket.{bucket}.access.key", conn.get('access_key'))
+                builder.config(f"spark.hadoop.fs.s3a.bucket.{bucket}.secret.key", conn.get('secret_key'))
+
+        spark = builder.getOrCreate()
+
+        for job in active_jobs:
+            job_id = job.get('job_id', 'unknown')
+            print(f">>> [JOB: {job_id}] Processing...")
+            try:
+                # 네임스페이스 자동 생성
+                ns = job['target_table'].split('.')[1]
+                spark.sql(f"CREATE NAMESPACE IF NOT EXISTS nessie.`{ns}`")
+                
+                # 데이터 로드 (Step 1)
+                df = spark.read.format(job['format']).option("recursiveFileLookup", "true").load(job['source_path'])
+                
+                df_final = df.select(
+                    col("path").alias("file_path"), 
+                    col("length").alias("file_size"), 
+                    from_utc_timestamp(col("modificationTime"), "Asia/Seoul").alias("modification_time")
+                ).withColumn("file_format", substring_index(col("file_path"), ".", -1)) \
+                 .withColumn("ingestion_time", from_utc_timestamp(current_timestamp(), "Asia/Seoul")) \
+                 .withColumn("cluster_id", lit(job.get("cluster_id", "Default"))) \
+                 .withColumn("description", lit(job.get("description", ""))) \
+                 .withColumn("date", regexp_extract(col("file_path"), r"date=([^/]+)", 1)) \
+                 .withColumn("weather", regexp_extract(col("file_path"), r"weather=([^/]+)", 1))
+
+                # Iceberg 테이블 쓰기
+                writer = df_final.writeTo(job['target_table'])
+                if job.get("partition_cols"):
+                    writer = writer.partitionedBy(*job['partition_cols'])
+                writer.createOrReplace()
+                print(f">>> [JOB: {job_id}] Data written to Iceberg.")
+
+                # 지능화 컨텍스트 추출 (Step 2)
+                schema_info = ", ".join([f"{f.name}({f.dataType.simpleString()})" for f in df_final.schema])
+                rich_context = (
+                    f"Table: {job['target_table']}. Cluster: {job.get('cluster_id', 'Default')}. "
+                    f"Description: {job.get('description', '')}. Format: {job['format']}. "
+                    f"Schema: [{schema_info}]. Partitioned by: {job.get('partition_cols', 'None')}. "
+                    f"Source: {job['source_path']}."
+                )
+
+                # AI 임베딩 생성 및 Milvus 등록
+                print(f">>> [AI] Vectorizing metadata for {job_id}...")
+                vector = get_embedding(rich_context)
+                if vector:
+                    upsert_to_milvus(job['target_table'], job.get('cluster_id'), rich_context, vector)
+                
+            except Exception as e:
+                print(f">>> [JOB: {job_id}] ❌ Error: {str(e)}")
+
+        spark.stop()
+
+    if __name__ == "__main__":
+        main()
