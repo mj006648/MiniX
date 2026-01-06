@@ -1,0 +1,38 @@
+# argocd/minix/apps/ollama/values.yaml
+
+# 1. 모델 자동 다운로드 설정 (부팅 시 Llama 3.1과 BGE-M3를 가져옵니다)
+ollama:
+  models:
+    pull:
+      - llama3.1  # 질문 답변용 (8B 모델 기준 약 4.7GB)
+      - bge-m3    # 문장을 숫자로 바꾸는 임베딩용 (약 1.2GB)
+
+# 2. 영구 스토리지 설정 (모델 파일을 Ceph에 저장하여 재시작해도 유지되게 함)
+persistentVolume:
+  enabled: true
+  storageClass: "rook-ceph-block"
+  size: 50Gi # 모델 여러 개를 대비해 넉넉히 잡습니다.
+  accessModes:
+    - ReadWriteOnce
+
+# 3. 리소스 할당 (Llama 3.1 8B를 돌리려면 최소 8GB 이상의 메모리 권장)
+resources:
+  requests:
+    cpu: "2"
+    memory: "4Gi"
+  limits:
+    cpu: "4"
+    memory: "8Gi"
+
+# 4. 서비스 설정 (에이전트가 내부 주소 http://ollama:11434 로 접근)
+service:
+  type: ClusterIP
+  port: 11434
+
+# 5. 프로브 설정 (모델 다운로드 시간이 길어질 수 있으므로 여유 있게 설정)
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 120
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 60

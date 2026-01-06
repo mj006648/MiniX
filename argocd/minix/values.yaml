@@ -294,3 +294,17 @@ applications:
           releaseName: milvus
           valueFiles:
             - "argocd/minix/apps/milvus/values.yaml"
+    ollama:
+      enabled: true
+      namespace: ollama
+      syncWave: "21" # Milvus(20) 다음에 배포
+      source:
+        type: helm
+        repoURL: https://helm.otwld.com/
+        chart: ollama
+        targetRevision: 1.36.0
+        helm:
+          releaseName: ollama
+          valueFiles:
+            - "argocd/minix/apps/ollama/values.yaml"
+
