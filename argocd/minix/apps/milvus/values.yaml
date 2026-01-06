@@ -1,0 +1,36 @@
+# Milvus Standalone 모드 설정
+cluster:
+  enabled: false # Standalone 모드
+
+# 이미지 설정
+image:
+  all:
+    tag: v2.6.8
+
+# 의존성 설정 (Standalone 시 내부적으로 사용)
+etcd:
+  replicaCount: 1
+  persistence:
+    storageClass: "rook-ceph-block"
+    size: 5Gi
+
+minio:
+  mode: standalone
+  persistence:
+    storageClass: "rook-ceph-block"
+    size: 10Gi
+
+# 메시지 큐 설정 (Woodpecker 사용 - 유지보수 최소화)
+standalone:
+  messageQueue: woodpecker
+woodpecker:
+  enabled: true
+streaming:
+  enabled: true
+
+# Milvus 웹 UI (Attu) 활성화
+attu:
+  enabled: true
+  name: attu
+  service:
+    type: LoadBalancer # 외부 접속이 필요하면 LoadBalancer, 아니면 ClusterIP

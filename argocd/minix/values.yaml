@@ -280,3 +280,17 @@ applications:
       syncWave: "19"
       source:
         path: "argocd/minix/apps/ingestion" # <-- 경로 확인
+
+    milvus:
+      enabled: true
+      namespace: milvus
+      syncWave: "20"
+      source:
+        type: helm
+        repoURL: https://zilliztech.github.io/milvus-helm/
+        chart: milvus
+        targetRevision: 4.0.31
+        helm:
+          releaseName: milvus
+          valueFiles:
+            - "argocd/minix/apps/milvus/values.yaml"
