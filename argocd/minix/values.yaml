@@ -289,7 +289,7 @@ applications:
         type: helm
         repoURL: https://zilliztech.github.io/milvus-helm/
         chart: milvus
-        targetRevision: 4.0.31
+        targetRevision: 5.0.11
         helm:
           releaseName: milvus
           valueFiles:
