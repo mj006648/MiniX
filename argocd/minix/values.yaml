@@ -282,7 +282,7 @@ applications:
         path: "argocd/minix/apps/ingestion" # <-- 경로 확인
 
     milvus:
-      enabled: false
+      enabled: true
       namespace: milvus
       syncWave: "20"
       source:
