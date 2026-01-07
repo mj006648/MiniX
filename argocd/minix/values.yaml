@@ -307,4 +307,17 @@ applications:
           releaseName: ollama
           valueFiles:
             - "argocd/minix/apps/ollama/values.yaml"
+    redis:
+      enabled: true
+      namespace: redis
+      syncWave: "10" # 최하단 인프라 레이어이므로 가장 먼저 배포 (Milvus는 20, Ollama는 21)
+      source:
+        type: helm
+        repoURL: https://charts.bitnami.com/bitnami
+        chart: redis
+        targetRevision: 24.1.0
+        helm:
+          releaseName: redis
+          valueFiles:
+            - "argocd/minix/apps/redis/values.yaml"
 

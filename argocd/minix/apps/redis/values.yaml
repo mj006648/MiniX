@@ -1,0 +1,72 @@
+# ~/myGit/MiniX/argocd/minix/apps/redis/values.yaml
+
+## 1. 아키텍처 설정
+# 메타데이터 캐싱용이므로 가볍고 빠른 Standalone 모드 사용
+architecture: standalone
+
+## 2. 이미지 및 모듈 설정 (Redis 8+ 지원)
+image:
+  registry: registry-1.docker.io
+  repository: bitnami/redis
+  tag: latest # 최신 버전 사용 (ReJSON/Search 포함 확인)
+
+## 3. 인증 설정 (보안)
+auth:
+  enabled: true
+  password: "minix-redis-password"
+  # 비밀번호를 환경 변수가 아닌 파일로 마운트하여 보안 강화
+  usePasswordFiles: true
+
+## 4. 핵심 커스텀 설정 (ReJSON & Storage Sense 최적화)
+# 이 부분이 Storage Sense의 심장입니다.
+commonConfiguration: |-
+  # 1) JSON 데이터 구조 지원 모듈 로드
+  loadmodule /opt/bitnami/redis/lib/redis/modules/rejson.so
+  loadmodule /opt/bitnami/redis/lib/redis/modules/redisearch.so
+  
+  # 2) 고속 쓰기를 위해 AOF(Append Only File) 활성화
+  appendonly yes
+  # RDB 스냅샷은 비활성화 (AOF가 더 안전하고 빠름)
+  save ""
+  
+  # 3) 메모리 관리 정책 (중요!)
+  # 2GB를 넘기면 가장 오래된(사용 안 된) 캐시부터 자동 삭제 (LRU)
+  maxmemory 2gb
+  maxmemory-policy allkeys-lru
+
+## 5. 마스터 노드 상세 설정 (Persistence & Resources)
+master:
+  # 리소스 할당 (메타데이터 쿼리 처리용)
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
+
+  # 영구 스토리지 (Rook-Ceph 연결)
+  persistence:
+    enabled: true
+    storageClass: "rook-ceph-block"
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+
+  # 서비스 노출 (주피터 및 외부 Spark 통신용)
+  service:
+    type: LoadBalancer
+    ports:
+      redis: 6379
+    # MetalLB를 통한 외부 IP 고정 시 유용 (선택 사항)
+    # loadBalancerIP: "10.34.48.247" 
+
+## 6. 네트워크 정책 (기본 허용)
+networkPolicy:
+  enabled: true
+  allowExternal: true
+
+## 7. 성능 모니터링 (선택 사항)
+# 나중에 Prometheus로 Redis 성능을 보고 싶을 때 활성화하세요.
+metrics:
+  enabled: false
