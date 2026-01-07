@@ -321,3 +321,13 @@ applications:
           valueFiles:
             - "argocd/minix/apps/redis/values.yaml"
 
+    redis-insight:
+      enabled: true
+      namespace: redis
+      syncWave: "11" # Redis(10) 배포 직후 배포
+      source:
+        # 직접 만든 YAML 파일들이 위치할 경로
+        path: "argocd/minix/apps/redis-insight"
+      syncOptions:
+        - CreateNamespace=true
+
