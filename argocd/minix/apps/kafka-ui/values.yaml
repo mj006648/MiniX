@@ -4,7 +4,7 @@
 image:
   registry: ghcr.io
   repository: kafbat/kafka-ui
-  tag: v1.6.0
+  tag: v1.4.2
   pullPolicy: IfNotPresent
 
 ## 2. 서비스 노출
