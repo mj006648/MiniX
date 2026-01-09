@@ -1,25 +1,24 @@
 # argocd/minix/apps/kafka-ui/values.yaml
 
 ## 1. 이미지 설정
-# 애플리케이션 버전 v1.6.0을 사용합니다.
 image:
   registry: ghcr.io
   repository: kafbat/kafka-ui
   tag: v1.6.0
   pullPolicy: IfNotPresent
 
-## 2. 서비스 노출 (LoadBalancer)
+## 2. 서비스 노출
 service:
   type: LoadBalancer
   port: 80
 
-## 3. 공식 가이드 기반 클러스터 설정 (Dict 방식)
+## 3. 클러스터 구성 (공식 가이드의 Dict 방식 적용)
+# 들여쓰기를 눈으로 꼭 확인해주세요! (스페이스 2칸씩)
 yamlApplicationConfig:
   kafka:
     clusters:
       - name: MiniX-Kafka-Cluster
         bootstrapServers: kafka:9092
-        # 스키마 레지스트리가 있으면 아래 주석을 해제하세요.
         schemaRegistry: http://schemaregistry:8081
   auth:
     type: disabled
@@ -28,7 +27,13 @@ yamlApplicationConfig:
       ldap:
         enabled: false
 
-## 4. 리소스 및 추가 환경변수
+## 4. 환경 변수 설정 (에러가 가장 많이 나는 부분!)
+# 'env' 대신 'envs.config'를 사용하는 것이 1.6.0 버전에서 더 안정적입니다.
+envs:
+  config:
+    DYNAMIC_CONFIG_ENABLED: "true"
+
+## 5. 리소스 할당
 resources:
   limits:
     cpu: 500m
@@ -36,7 +41,3 @@ resources:
   requests:
     cpu: 200m
     memory: 256Mi
-
-env:
-  # UI에서 설정을 변경할 수 있도록 활성화
-  DYNAMIC_CONFIG_ENABLED: "true"
