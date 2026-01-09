@@ -331,3 +331,18 @@ applications:
       syncOptions:
         - CreateNamespace=true
 
+    kafka-ui:
+      enabled: true
+      namespace: confluent
+      syncWave: "25"
+      source:
+        type: helm
+        # 제공해주신 가이드의 공식 Repo 주소
+        repoURL: https://kafbat.github.io/helm-charts
+        chart: kafka-ui
+        # 차트 버전도 1.6.0으로 맞춤 (앱 버전과 동일하게 출시됨)
+        targetRevision: 1.6.0
+        helm:
+          releaseName: kafka-ui
+          valueFiles:
+            - "argocd/minix/apps/kafka-ui/values.yaml"
