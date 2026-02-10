@@ -1,0 +1,30 @@
+# argocd/minix/apps/open-webui/values.yaml
+
+# 1. 내장 도구들 설정
+ollama:
+  enabled: false # 중요: 이미 따로 띄운 Ollama가 있으므로 내장 설치는 끕니다.
+
+pipelines:
+  enabled: true # 나중에 플러그인 기능을 위해 켜두는 것을 추천합니다.
+
+# 2. 기존 Ollama 연결 (아까 확인한 외부 IP 사용)
+ollamaUrls:
+  - "http://10.34.48.246:11434"
+
+# 3. 서비스 설정 (외부 접속용)
+service:
+  type: LoadBalancer
+  port: 80
+
+# 4. 저장소 설정 (로그인 및 대화 내역 유지)
+persistence:
+  enabled: true
+  storageClass: "rook-ceph-block" # 형님의 Ceph 스토리지 클래스 이름
+  size: 5Gi
+
+# 5. 성능 및 보안 설정
+extraEnvVars:
+  - name: WEBUI_AUTH
+    value: "true"
+  - name: OLLAMA_BASE_URL
+    value: "http://10.34.48.246:11434"

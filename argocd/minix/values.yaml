@@ -365,3 +365,17 @@ applications:
       syncOptions:
         # gpu-operator 네임스페이스가 없다면 ArgoCD가 자동으로 생성합니다.
         - CreateNamespace=true
+
+    open-webui:
+      enabled: true
+      namespace: open-webui
+      syncWave: "27"
+      source:
+        type: helm
+        repoURL: https://helm.openwebui.com/ # 공식 리포지토리
+        chart: open-webui
+        targetRevision: 10.2.1 # 최신 차트 버전
+        helm:
+          releaseName: open-webui
+          valueFiles:
+            - "argocd/minix/apps/open-webui/values.yaml"
