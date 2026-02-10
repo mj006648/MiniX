@@ -34,3 +34,7 @@ persistentVolume:
   enabled: true
   storageClass: "rook-ceph-block"
   size: 50Gi # 8B 모델은 5GB 내외라 50GB면 아주 넉넉합니다.
+  
+service:
+  type: LoadBalancer # ClusterIP에서 LoadBalancer로 변경
+  port: 11434
