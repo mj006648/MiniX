@@ -1,38 +1,36 @@
-# argocd/minix/apps/ollama/values.yaml
-
-# 1. 모델 자동 다운로드 설정 (부팅 시 Llama 3.1과 BGE-M3를 가져옵니다)
+# 1. 모델 설정 (Llama 3.1 8B)
 ollama:
+  gpu:
+    enabled: true
+    type: 'nvidia'
+    number: 1
   models:
     pull:
-      - llama3.2  # 질문 답변용 3B 모델 (약 2.0GB)
-      - bge-m3    # 문장을 숫자로 바꾸는 임베딩용 (약 1.2GB)
+      - "llama3.1:8b" # 가장 표준적이고 안정적인 8B 모델
+      - "bge-m3"      # 임베딩용 (필요시 유지)
 
-# 2. 영구 스토리지 설정 (모델 파일을 Ceph에 저장하여 재시작해도 유지되게 함)
-persistentVolume:
-  enabled: true
-  storageClass: "rook-ceph-block"
-  size: 50Gi # 모델 여러 개를 대비해 넉넉히 잡습니다.
-  accessModes:
-    - ReadWriteOnce
+# 2. 노드 선택 (GPU 노드로 고정)
+nodeSelector:
+  nvidia.com/gpu.present: "true"
 
-# 3. 리소스 할당 (Llama 3.1 8B를 돌리려면 최소 8GB 이상의 메모리 권장)
+# 3. 네트워크 이슈 해결 (중요!)
+# 통신 문제를 피하기 위해 호스트 네트워크를 사용합니다.
+hostNetwork: true
+dnsPolicy: ClusterFirstWithHostNet
+
+# 4. 리소스 할당 (8B 모델은 자원이 여유로우므로 안정성에 집중)
 resources:
   requests:
     cpu: "2"
-    memory: "6Gi"
+    memory: "8Gi"
+    nvidia.com/gpu: 1
   limits:
     cpu: "4"
-    memory: "12Gi"
+    memory: "16Gi"
+    nvidia.com/gpu: 1
 
-# 4. 서비스 설정 (에이전트가 내부 주소 http://ollama:11434 로 접근)
-service:
-  type: LoadBalancer
-  port: 11434
-
-# 5. 프로브 설정 (모델 다운로드 시간이 길어질 수 있으므로 여유 있게 설정)
-livenessProbe:
+# 5. 스토리지 설정
+persistentVolume:
   enabled: true
-  initialDelaySeconds: 120
-readinessProbe:
-  enabled: true
-  initialDelaySeconds: 60
+  storageClass: "rook-ceph-block"
+  size: 50Gi # 8B 모델은 5GB 내외라 50GB면 아주 넉넉합니다.
