@@ -1,31 +1,49 @@
-# FILE: argocd/minix/apps/gpu-operator/values.yaml
-# Operator가 생성하는 모든 핵심 구성요소(드라이버, 툴킷, 플러그인 등)의
-# 배포 위치를 'NodeGroup=gpu' 레이블이 있는 노드로 강제합니다.
+# 1. MIG 전략 설정: Mixed로 변경 (MIG와 일반 GPU 혼용을 위해 필수)
+mig:
+  strategy: mixed
 
+# 2. 드라이버 설정: False로 변경 (이미 드라이버를 직접 설치하고 고정했기 때문)
 driver:
-  nodeSelector:
-    NodeGroup: gpu
+  enabled: false  # 중요: 오퍼레이터가 드라이버를 다시 깔지 않도록 끔
+
+# 3. 툴킷 설정: 드라이버가 이미 있으므로 경로 확인이 중요 (기본값 유지 가능)
 toolkit:
-  nodeSelector:
-    NodeGroup: gpu
+  enabled: true
+  # 만약 드라이버 설치 경로가 다르다면 수정이 필요할 수 있지만 기본적으로는 유지
+
+# 4. 디바이스 플러그인: Mixed 전략 명시 (선택 사항이지만 안전함)
 devicePlugin:
-  nodeSelector:
-    NodeGroup: gpu
+  enabled: true
+  config:
+    name: ""
+    default: ""
+    # 필요시 여기에 mig-mixed 설정을 넣을 수 있으나 mig.strategy: mixed로 충분함
+
+# 5. MIG 매니저 설정: 활성화 확인
+migManager:
+  enabled: true
+  config:
+    default: "all-disabled" # 기본값은 비활성화 상태로 유지
+
+# 6. 모든 구성 요소에 노드 셀렉터 적용 (GPU 노드에만 배포되도록)
+# 질문자님의 클러스터 레이블인 'NodeGroup: gpu'를 활용합니다.
+daemonsets:
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+# 각 컴포넌트별 NodeSelector (아래 내용들을 각 섹션에 찾아 넣으세요)
+validator:
+  nodeSelector: { NodeGroup: gpu }
+devicePlugin:
+  nodeSelector: { NodeGroup: gpu }
 dcgmExporter:
-  nodeSelector:
-    NodeGroup: gpu
-gfd: # GPU Feature Discovery
-  nodeSelector:
-    NodeGroup: gpu
-
-# Operator의 "두뇌" 자체도 같은 노드에 위치하도록 설정합니다.
-operator:
-  nodeSelector:
-    NodeGroup: gpu
-
-# NFD(Node Feature Discovery)의 워커도 같은 규칙을 따르도록 합니다.
+  nodeSelector: { NodeGroup: gpu }
+gfd:
+  nodeSelector: { NodeGroup: gpu }
+migManager:
+  nodeSelector: { NodeGroup: gpu }
 node-feature-discovery:
   worker:
-    nodeSelector:
-      NodeGroup: gpu
-
+    nodeSelector: { NodeGroup: gpu }
