@@ -348,7 +348,7 @@ applications:
             - "argocd/minix/apps/kafka-ui/values.yaml"
 
     gpu-operator:
-      enabled: true
+      enabled: false
       namespace: gpu-operator # Operator와 관련 컴포넌트를 설치할 네임스페이스
       syncWave: "26"
       source:
