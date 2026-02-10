@@ -356,7 +356,7 @@ applications:
         repoURL: https://helm.ngc.nvidia.com/nvidia  # NVIDIA 공식 Helm 리포지토리
         chart: gpu-operator
         # Helm 차트 버전을 공식 문서에 나온 안정 버전으로 명시합니다.
-        targetRevision: "v25.3.4"
+        targetRevision: "v25.10.1"
         helm:
           releaseName: gpu-operator
           valueFiles:
