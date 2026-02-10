@@ -1,0 +1,53 @@
+apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: SparkApplication
+metadata:
+  name: trident-kafka-batch-engine
+  namespace: spark-operator
+spec:
+  type: Python
+  mode: cluster
+  image: "ich6648/spark-iceberg-nessie-kafka:12.0" # redis 포함 이미지 
+  imagePullPolicy: Always
+  mainApplicationFile: "local:///mnt/scripts/kafka_batch_ingest.py"
+  sparkVersion: "3.5.2"
+  restartPolicy:
+    type: Never
+
+  deps:
+    packages:
+      - org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.1
+      - org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.99.0
+      - org.apache.hadoop:hadoop-aws:3.3.4
+      - com.amazonaws:aws-java-sdk-bundle:1.12.749
+      - org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.2
+
+  sparkConf:
+    "spark.jars.ivy": "/tmp/.ivy2"
+    "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions"
+    "spark.sql.defaultCatalog": "nessie"
+    "spark.sql.session.timeZone": "Asia/Seoul"
+
+  driver:
+    serviceAccount: trident-spark-sa
+    cores: 1
+    memory: "1g"
+    envFrom:
+      - secretRef:
+          name: trident-s3-creds
+    volumeMounts:
+      - name: scripts-volume
+        mountPath: /mnt/scripts
+  executor:
+    instances: 1
+    cores: 1
+    memory: "2g"
+    envFrom:
+      - secretRef:
+          name: trident-s3-creds
+    volumeMounts:
+      - name: scripts-volume
+        mountPath: /mnt/scripts
+  volumes:
+    - name: scripts-volume
+      configMap:
+        name: trident-kafka-batch-scripts # 02번 ConfigMap 이름과 정확히 일치!!

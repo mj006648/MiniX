@@ -346,3 +346,22 @@ applications:
           releaseName: kafka-ui
           valueFiles:
             - "argocd/minix/apps/kafka-ui/values.yaml"
+
+    gpu-operator:
+      enabled: true
+      namespace: gpu-operator # Operator와 관련 컴포넌트를 설치할 네임스페이스
+      syncWave: "26"
+      source:
+        type: helm
+        repoURL: https://helm.ngc.nvidia.com/nvidia  # NVIDIA 공식 Helm 리포지토리
+        chart: gpu-operator
+        # Helm 차트 버전을 공식 문서에 나온 안정 버전으로 명시합니다.
+        targetRevision: "v25.3.4"
+        helm:
+          releaseName: gpu-operator
+          valueFiles:
+            # 1단계에서 생성한 상세 설정 파일의 경로를 지정합니다.
+            - "argocd/minix/apps/gpu-operator/values.yaml"
+      syncOptions:
+        # gpu-operator 네임스페이스가 없다면 ArgoCD가 자동으로 생성합니다.
+        - CreateNamespace=true

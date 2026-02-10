@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trident-kafka-batch-scripts
+  namespace: spark-operator
+data:
+  ingest_config.json: |
+    {
+      "kafka_bootstrap": "kafka.confluent.svc.cluster.local:9092",
+      "jobs": [
+        {
+          "job_id": "parking_entry_batch",
+          "description": "차량 입차의 필요한 정형데이터 수집",
+          "cluster_id": "MiniX-Cluster-01",
+          "topic": "parking-entries",
+          "target_table": "nessie.parking.entries5",
+          "metadata_keys": ["carId", "entryGate", "weather", "entrySpeed"],
+          "partition_cols": ["cluster_id", "weather"], 
+          "checkpoint_path": "s3a://iceberg2-data/checkpoints/entries_v4",
+          "force_reset": true
+        }
+      ]
+    }
+
+  # [실행 스크립트] Rich Context 생성을 위해 업데이트됨
+  kafka_batch_ingest.py: |
+    import os
+    import json
+    import requests
+    import redis
+    import sys
+    from datetime import datetime
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import col, lit, current_timestamp, get_json_object
+    from pymilvus import connections, Collection, utility, DataType, FieldSchema, CollectionSchema
+
+    MILVUS_HOST = "milvus.milvus.svc.cluster.local"
+    OLLAMA_URL = "http://ollama.ollama.svc.cluster.local:11434/api/embeddings"
+    REDIS_HOST = "redis-master.redis.svc.cluster.local"
+    REDIS_PW = "minix-redis-password"
+
+    def get_embedding(text):
+        try:
+            res = requests.post(OLLAMA_URL, json={"model": "bge-m3", "prompt": text}, timeout=30)
+            return res.json()['embedding']
+        except: return None
+
+    def upsert_to_milvus(table_name, cluster_id, rich_context, vector):
+        try:
+            connections.connect("default", host=MILVUS_HOST, port="19530")
+            if not utility.has_collection("data_sense_catalog"):
+                fields = [
+                    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+                    FieldSchema(name="table_name", dtype=DataType.VARCHAR, max_length=255),
+                    FieldSchema(name="cluster_id", dtype=DataType.VARCHAR, max_length=100),
+                    FieldSchema(name="rich_context", dtype=DataType.VARCHAR, max_length=4000),
+                    FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=1024)
+                ]
+                col_obj = Collection("data_sense_catalog", CollectionSchema(fields))
+                col_obj.create_index("vector", {"index_type":"HNSW","metric_type":"L2","params":{"M":8,"efConstruction":64}})
+            
+            col_obj = Collection("data_sense_catalog")
+            col_obj.load()
+            col_obj.delete(expr=f'table_name == "{table_name}"')
+            col_obj.insert([[table_name], [cluster_id], [rich_context], [vector]])
+            col_obj.flush()
+            print(f">>> [MILVUS] Metadata updated for {table_name}")
+        except Exception as e: print(f">>> [MILVUS ERROR] {e}")
+
+    def push_storage_sense(spark, target_table):
+        try:
+            r = redis.Redis(host=REDIS_HOST, port=6379, password=REDIS_PW)
+            system_table = f"{target_table}.files"
+            files_df = spark.sql(f"SELECT * FROM {system_table}")
+            
+            clean_name = ".".join(target_table.split(".")[1:])
+            meta_data = {
+                "table": clean_name, "updated": datetime.now().isoformat(),
+                "files": [ {
+                    "p": row['file_path'], 
+                    "cnt": row['record_count'],
+                    "part": str(row.asDict().get('partition', {})),
+                    "stats": str(row['lower_bounds'])
+                } for row in files_df.collect() ]
+            }
+            r.execute_command('JSON.SET', f"iceberg:meta:{clean_name}", '.', json.dumps(meta_data))
+            print(f">>> [STORAGE SENSE] {clean_name} cached.")
+        except Exception as e: print(f">>> [REDIS ERROR] {str(e)}")
+
+    def main():
+        spark = SparkSession.builder \
+            .config("spark.sql.session.timeZone", "Asia/Seoul") \
+            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions") \
+            .config("spark.sql.catalog.nessie", "org.apache.iceberg.spark.SparkCatalog") \
+            .config("spark.sql.catalog.nessie.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog") \
+            .config("spark.sql.catalog.nessie.uri", "http://nessie.nessie-ns.svc.cluster.local:19120/api/v1") \
+            .config("spark.sql.catalog.nessie.warehouse", "s3a://iceberg2-data/warehouse") \
+            .config("spark.hadoop.fs.s3a.bucket.iceberg2-data.endpoint", os.environ.get("ICEBERG_ENDPOINT")) \
+            .config("spark.hadoop.fs.s3a.bucket.iceberg2-data.access.key", os.environ.get("ICEBERG_ACCESS_KEY")) \
+            .config("spark.hadoop.fs.s3a.bucket.iceberg2-data.secret.key", os.environ.get("ICEBERG_SECRET_KEY")) \
+            .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+            .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
+            .getOrCreate()
+
+        with open("/mnt/scripts/ingest_config.json", "r") as f:
+            config = json.load(f)
+
+        for job in config['jobs']:
+            target_table = job['target_table']
+            p_cols = job.get("partition_cols", []) 
+            m_keys = job.get("metadata_keys", [])
+            print(f">>> [JOB: {job['job_id']}] Processing...")
+
+            if job.get("force_reset", False):
+                spark.sql(f"DROP TABLE IF EXISTS {target_table}")
+                checkpoint_path = f"{job['checkpoint_path']}_reset_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            else:
+                checkpoint_path = job['checkpoint_path']
+
+            spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {'.'.join(target_table.split('.')[:2])}")
+
+            raw_stream = spark.readStream \
+                .format("kafka") \
+                .option("kafka.bootstrap.servers", config['kafka_bootstrap']) \
+                .option("subscribe", job['topic']) \
+                .option("startingOffsets", "earliest") \
+                .load()
+
+            json_df = raw_stream.selectExpr("CAST(value AS STRING) as json_val")
+            for key in m_keys:
+                json_df = json_df.withColumn(key, get_json_object(col("json_val"), f"$.{key}"))
+            
+            final_df = json_df.withColumn("ingest_time", current_timestamp()).withColumn("cluster_id", lit(job['cluster_id'])).drop("json_val")
+
+            def batch_process(df, batch_id):
+                if df.count() > 0:
+                    if not spark.catalog.tableExists(target_table):
+                        writer = df.writeTo(target_table)
+                        if p_cols: writer = writer.partitionedBy(*p_cols)
+                        writer.create()
+                    else:
+                        df.write.format("iceberg").mode("append").save(target_table)
+                    
+                    # --- [수정 포인트] Step 1과 동일한 Rich Context 생성 ---
+                    if batch_id == 0:
+                        schema_str = df.schema.simpleString()
+                        rich_context = (
+                            f"Table: {target_table}. "
+                            f"Cluster: {job.get('cluster_id')}. "
+                            f"Description: {job.get('description')}. "
+                            f"Metadata Keys: {m_keys}. "
+                            f"Partitions: {p_cols}. "
+                            f"Schema: {schema_str}"
+                        )
+                        vector = get_embedding(rich_context)
+                        if vector:
+                            upsert_to_milvus(target_table, job.get('cluster_id'), rich_context, vector)
+                        push_storage_sense(spark, target_table)
+
+            query = final_df.writeStream \
+                .foreachBatch(batch_process) \
+                .trigger(availableNow=True) \
+                .option("checkpointLocation", checkpoint_path) \
+                .start()
+            
+            query.awaitTermination()
+        spark.stop()
+
+    if __name__ == "__main__":
+        main()

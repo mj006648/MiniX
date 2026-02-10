@@ -1,0 +1,31 @@
+# FILE: argocd/minix/apps/gpu-operator/values.yaml
+# Operator가 생성하는 모든 핵심 구성요소(드라이버, 툴킷, 플러그인 등)의
+# 배포 위치를 'NodeGroup=gpu' 레이블이 있는 노드로 강제합니다.
+
+driver:
+  nodeSelector:
+    NodeGroup: gpu
+toolkit:
+  nodeSelector:
+    NodeGroup: gpu
+devicePlugin:
+  nodeSelector:
+    NodeGroup: gpu
+dcgmExporter:
+  nodeSelector:
+    NodeGroup: gpu
+gfd: # GPU Feature Discovery
+  nodeSelector:
+    NodeGroup: gpu
+
+# Operator의 "두뇌" 자체도 같은 노드에 위치하도록 설정합니다.
+operator:
+  nodeSelector:
+    NodeGroup: gpu
+
+# NFD(Node Feature Discovery)의 워커도 같은 규칙을 따르도록 합니다.
+node-feature-discovery:
+  worker:
+    nodeSelector:
+      NodeGroup: gpu
+
