@@ -31,7 +31,7 @@ parameters:
   clusterID: rook-ceph
   fsName: myfs
   # 'replicated'를 정확하게 가리키도록
-  pool: replicated
+  pool: myfs-replicated
   "csi.storage.k8s.io/provisioner-secret-name": rook-csi-cephfs-provisioner
   "csi.storage.k8s.io/provisioner-secret-namespace": rook-ceph
   "csi.storage.k8s.io/node-stage-secret-name": rook-csi-cephfs-node
