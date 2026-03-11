@@ -1,4 +1,4 @@
-# 1. 모델 설정 (Llama 3.1 8B)
+# 1. 모델 설정 (3090 최적화: Qwen3-32B + DeepSeek-R1-14B)
 ollama:
   gpu:
     enabled: true
@@ -6,35 +6,43 @@ ollama:
     number: 1
   models:
     pull:
-      - "llama3.1:8b" # 가장 표준적이고 안정적인 8B 모델
-      - "bge-m3"      # 임베딩용 (필요시 유지)
+      - "qwen3:32b"         # 메인 모델: 똑똑하고 빠름
+      - "deepseek-r1:14b"   # 서브 모델: 논리 추론용 (매우 빠름)
+      - "bge-m3"            # 임베딩용
 
-# 2. 노드 선택 (GPU 노드로 고정)
+# 2. 노드 선택 (GPU 노드 고정)
 nodeSelector:
   nvidia.com/gpu.present: "true"
 
-# 3. 네트워크 이슈 해결 (중요!)
-# 통신 문제를 피하기 위해 호스트 네트워크를 사용합니다.
+# 3. 네트워크 (기존 유지: 안정성 확보)
 hostNetwork: true
 dnsPolicy: ClusterFirstWithHostNet
 
-# 4. 리소스 할당 (8B 모델은 자원이 여유로우므로 안정성에 집중)
+# 4. 리소스 할당 (32B 모델에 맞춰 상향 조정됨)
 resources:
   requests:
-    cpu: "2"
-    memory: "8Gi"
+    cpu: "4"
+    memory: "24Gi"           # 모델 로드를 위한 여유 공간 (8Gi에서 상향)
     nvidia.com/gpu: 1
   limits:
-    cpu: "4"
-    memory: "16Gi"
+    cpu: "8"                 # 응답 전처리 속도 향상
+    memory: "32Gi"           # (16Gi에서 상향)
     nvidia.com/gpu: 1
 
-# 5. 스토리지 설정
+# 5. 스토리지 설정 (용량 상향)
 persistentVolume:
   enabled: true
   storageClass: "rook-ceph-block"
-  size: 50Gi # 8B 모델은 5GB 내외라 50GB면 아주 넉넉합니다.
-  
+  size: 100Gi                # 32B 모델들은 용량이 큼 (50Gi에서 상향)
+
+# 6. 서비스 설정 (기존 유지)
 service:
-  type: LoadBalancer # ClusterIP에서 LoadBalancer로 변경
+  type: LoadBalancer
   port: 11434
+
+# 7. 추가 최적화 설정 (반응 속도 극대화)
+extraEnv:
+  - name: OLLAMA_FLASH_ATTENTION
+    value: "1"               # GPU 연산 가속
+  - name: OLLAMA_KEEP_ALIVE
+    value: "24h"             # 모델을 메모리에 계속 띄워둠 (첫 응답 지연 제거)
