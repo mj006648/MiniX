@@ -84,6 +84,11 @@ kubectl config get-contexts
   - 실제 결과 기록 위치
   - 문제/에러 기록 형식
   - ScaleX-POD에 주는 의미
+- [`experiments/2026-06-25-01-cluster-affinity-twinx-only.md`](./experiments/2026-06-25-01-cluster-affinity-twinx-only.md)
+  - `clusterAffinity.labelSelector`로 twinx-only workload 배치 검증
+  - Namespace가 edgex/datax에도 생성되는 관찰 이슈 기록
+- [`experiments/2026-06-25-02-namespace-auto-propagation.md`](./experiments/2026-06-25-02-namespace-auto-propagation.md)
+  - Namespace 전파 정책 없이 namespaced workload만 전파할 때 namespace 자동 생성 범위 확인
 
 ---
 

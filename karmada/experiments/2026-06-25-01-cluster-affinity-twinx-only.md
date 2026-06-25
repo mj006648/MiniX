@@ -217,10 +217,11 @@ karmada-es-twinx   demo-twinx-nginx-...        Service     True
   - workload 배치 정책 검증에는 성공했다.
   - 하지만 namespace 자체까지 엄격히 특정 cluster에만 존재해야 하는 요구사항이라면 추가 검증이 필요하다.
 
-- 다음 확인 후보:
-  - Namespace ClusterPropagationPolicy 없이 namespaced Deployment/Service만 전파하면 namespace가 어떻게 생성되는지 확인
-  - Namespace를 사전에 member cluster에 만들지 않고 Karmada가 자동 생성하는 동작 확인
-  - Karmada upstream issue 검색/작성 후보로 남김
+- 후속 확인 결과:
+  - 실험 02에서 Namespace ClusterPropagationPolicy 없이 namespaced Deployment/Service만 전파해도 edgex/datax에 namespace가 생성됨을 확인했다.
+  - 따라서 Karmada가 namespaced workload 전파 과정에서 namespace를 자동 생성하는 동작일 가능성이 크다.
+  - workload 자체는 twinx에만 배치되므로 clusterAffinity는 정상 동작한다.
+  - namespace 자동 생성 범위는 Karmada upstream issue/discussion 후보로 남긴다.
 
 
 ---
@@ -253,7 +254,7 @@ DataX 전용 data workload
 
 ## 다음 액션
 
-- Namespace가 edgex/datax에도 생성된 이유를 추가 실험으로 확인한다.
+- 실험 02에서 Namespace가 edgex/datax에도 생성되는 현상이 ClusterPropagationPolicy 때문이 아니라 namespace 자동 생성 동작일 가능성을 확인했다.
 - EdgeX-only / DataX-only도 같은 방식으로 검증한다.
 - 이후 replica weight 분산 실험으로 넘어간다.
 - GitHub issue 후보로 남길 수 있도록 관련 Karmada 객체 YAML과 controller-manager 로그를 보존한다.

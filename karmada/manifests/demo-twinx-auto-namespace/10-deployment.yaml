@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-twinx-auto-nginx
+  namespace: demo-twinx-auto
+  labels:
+    app: demo-twinx-auto-nginx
+    scalex.io/target: twinx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-twinx-auto-nginx
+  template:
+    metadata:
+      labels:
+        app: demo-twinx-auto-nginx
+        scalex.io/target: twinx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          ports:
+            - containerPort: 80
