@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-taint-new-nginx
+  namespace: demo-taint-new
+  labels:
+    app: demo-taint-new-nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: demo-taint-new-nginx
+  template:
+    metadata:
+      labels:
+        app: demo-taint-new-nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          ports:
+            - containerPort: 80

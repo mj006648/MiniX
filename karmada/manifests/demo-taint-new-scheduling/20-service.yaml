@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-taint-new-nginx
+  namespace: demo-taint-new
+  labels:
+    app: demo-taint-new-nginx
+spec:
+  type: ClusterIP
+  selector:
+    app: demo-taint-new-nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

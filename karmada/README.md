@@ -9,11 +9,11 @@
 ## 현재 상태
 
 - 작성일: 2026-06-25
-- 상태: 실험 04까지 완료, OverridePolicy cluster별 env 변경 검증 성공
+- 상태: 실험 05까지 완료, cluster taint/toleration 동작 검증
 - 실제 Karmada 설치: `kind-tower`에 설치 완료
 - 우선 실험 방식: `kind` 기반 로컬 멀티클러스터 실습
 - 최종 적용 대상: ScaleX-POD 멀티클러스터
-- 특이사항: Docker/kind 설치, inotify limit, context 전환, Karmada CLI 설치, Namespace binding 상태 이슈, Work 조회 kubeconfig 차이를 실험 문서에 기록
+- 특이사항: Docker/kind 설치, inotify limit, context 전환, Karmada CLI 설치, Namespace binding 상태 이슈, Work 조회 kubeconfig 차이, cluster taint 기존 workload eviction 미확인, scheduler-estimator 로그를 실험 문서에 기록
 
 ---
 
@@ -94,6 +94,9 @@ kubectl config get-contexts
   - `replicaScheduling`의 `Divided + Weighted`로 twinx/edgex/datax replica 가중 분산 검증
 - [`experiments/2026-06-25-04-override-policy-env.md`](./experiments/2026-06-25-04-override-policy-env.md)
   - `OverridePolicy`의 `plaintext` overrider로 twinx/edgex/datax별 env 변경 검증
+- [`experiments/2026-06-25-05-cluster-taint-failover.md`](./experiments/2026-06-25-05-cluster-taint-failover.md)
+  - `Cluster` taint와 `clusterTolerations`로 새 workload 배치 회피/허용 검증
+  - 수동 `NoExecute` taint만으로 기존 ResourceBinding 즉시 eviction은 확인되지 않음
 
 ---
 
@@ -239,10 +242,14 @@ karmada/
     2026-06-25-02-namespace-auto-propagation.md         # namespace 자동 생성 관찰
     2026-06-25-03-weighted-replica-scheduling.md        # weighted replica 분산
     2026-06-25-04-override-policy-env.md                # cluster별 env override
+    2026-06-25-05-cluster-taint-failover.md             # cluster taint/toleration/failover 관찰
   manifests/
     demo-nginx/                     # 기본 전파 실험용 YAML
     demo-twinx-only/                # twinx-only 배치 YAML
     demo-twinx-auto-namespace/      # namespace 자동 생성 확인 YAML
     demo-weighted-replicas/         # weighted replica YAML
     demo-override-env/              # OverridePolicy env YAML
+    demo-failover-taint/            # 기존 workload taint 관찰 YAML
+    demo-taint-new-scheduling/      # taint 상태 새 workload 배치 YAML
+    demo-taint-tolerated/           # clusterTolerations YAML
 ```
