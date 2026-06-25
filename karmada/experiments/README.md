@@ -26,6 +26,7 @@
 | 01 | [`2026-06-25-01-cluster-affinity-twinx-only.md`](./2026-06-25-01-cluster-affinity-twinx-only.md) | labelSelector로 twinx-only 배치 | 부분 성공 | Deployment/Service/Pod는 twinx에만 배치, namespace는 다른 member에도 생성됨 |
 | 02 | [`2026-06-25-02-namespace-auto-propagation.md`](./2026-06-25-02-namespace-auto-propagation.md) | namespace 자동 생성 동작 확인 | 관찰 완료 | Namespace 정책 없이도 workload namespace가 모든 member에 자동 생성되는 현상 확인 |
 | 03 | [`2026-06-25-03-weighted-replica-scheduling.md`](./2026-06-25-03-weighted-replica-scheduling.md) | weighted replica 분산 | 성공 | replicas=6, weight 4:1:1을 twinx=4/edgex=1/datax=1로 분산 |
+| 04 | [`2026-06-25-04-override-policy-env.md`](./2026-06-25-04-override-policy-env.md) | OverridePolicy env 변경 | 성공 | 같은 Deployment를 twinx/edgex/datax에 배포하면서 cluster별 env를 다르게 적용 |
 
 ---
 
@@ -33,21 +34,20 @@
 
 | 우선순위 | 주제 | ScaleX-POD에서 의미 |
 | --- | --- | --- |
-| 1 | OverridePolicy | EdgeX/DataX/TwinX별 image/env/storageClass/nodeSelector 차이 반영 |
-| 2 | cluster taint/failover | TwinX 장애 또는 점검 시 다른 cluster로 회피 |
-| 3 | cluster taint/failover | TwinX 장애 또는 점검 시 다른 cluster로 회피 |
-| 4 | spreadConstraints | zone/role/provider 기준 분산 배치 |
-| 5 | ArgoCD -> Karmada API Server | GitOps 흐름 검증 |
-| 6 | Kueue와 조합 | cluster 배치는 Karmada, cluster 내부 job admission은 Kueue로 분리 |
-| 7 | Pull mode | EdgeX처럼 외부에서 직접 접근하기 어려운 cluster 후보 검증 |
+| 1 | cluster taint/failover | TwinX 장애 또는 점검 시 다른 cluster로 회피 |
+| 2 | OverridePolicy image/storageClass | EdgeX/DataX/TwinX별 image registry와 storageClass 차이 반영 |
+| 3 | spreadConstraints | zone/role/provider 기준 분산 배치 |
+| 4 | ArgoCD -> Karmada API Server | GitOps 흐름 검증 |
+| 5 | Kueue와 조합 | cluster 배치는 Karmada, cluster 내부 job admission은 Kueue로 분리 |
+| 6 | Pull mode | EdgeX처럼 외부에서 직접 접근하기 어려운 cluster 후보 검증 |
 
 ---
 
 ## 현재 우선순위
 
 ```text
-1. OverridePolicy
-2. failover/taint
+1. failover/taint
+2. OverridePolicy image/storageClass
 3. ArgoCD 연동
 4. Pull mode 후보 검토
 ```

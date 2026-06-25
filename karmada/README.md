@@ -9,11 +9,11 @@
 ## 현재 상태
 
 - 작성일: 2026-06-25
-- 상태: 실험 00 kind 기반 ScaleX-POD 축소 Karmada Lab 1차 성공
+- 상태: 실험 04까지 완료, OverridePolicy cluster별 env 변경 검증 성공
 - 실제 Karmada 설치: `kind-tower`에 설치 완료
 - 우선 실험 방식: `kind` 기반 로컬 멀티클러스터 실습
 - 최종 적용 대상: ScaleX-POD 멀티클러스터
-- 특이사항: Docker/kind 설치, inotify limit, context 전환, Karmada CLI 설치, Namespace binding 상태 이슈를 실험 문서에 기록
+- 특이사항: Docker/kind 설치, inotify limit, context 전환, Karmada CLI 설치, Namespace binding 상태 이슈, Work 조회 kubeconfig 차이를 실험 문서에 기록
 
 ---
 
@@ -92,6 +92,8 @@ kubectl config get-contexts
   - Namespace 전파 정책 없이 namespaced workload만 전파할 때 namespace 자동 생성 범위 확인
 - [`experiments/2026-06-25-03-weighted-replica-scheduling.md`](./experiments/2026-06-25-03-weighted-replica-scheduling.md)
   - `replicaScheduling`의 `Divided + Weighted`로 twinx/edgex/datax replica 가중 분산 검증
+- [`experiments/2026-06-25-04-override-policy-env.md`](./experiments/2026-06-25-04-override-policy-env.md)
+  - `OverridePolicy`의 `plaintext` overrider로 twinx/edgex/datax별 env 변경 검증
 
 ---
 
@@ -231,7 +233,16 @@ karmada/
   notes/
     concepts.md                     # 개념 정리
   experiments/
-    2026-06-25-00-kind-lab-plan.md  # 첫 실험 계획/기록
+    README.md                                           # 실험 진행표
+    2026-06-25-00-kind-lab-plan.md                      # kind/Karmada Lab 구성
+    2026-06-25-01-cluster-affinity-twinx-only.md        # twinx-only 배치
+    2026-06-25-02-namespace-auto-propagation.md         # namespace 자동 생성 관찰
+    2026-06-25-03-weighted-replica-scheduling.md        # weighted replica 분산
+    2026-06-25-04-override-policy-env.md                # cluster별 env override
   manifests/
-    demo-nginx/                     # 첫 전파 실험용 예제 YAML
+    demo-nginx/                     # 기본 전파 실험용 YAML
+    demo-twinx-only/                # twinx-only 배치 YAML
+    demo-twinx-auto-namespace/      # namespace 자동 생성 확인 YAML
+    demo-weighted-replicas/         # weighted replica YAML
+    demo-override-env/              # OverridePolicy env YAML
 ```

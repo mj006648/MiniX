@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-override-nginx
+  namespace: demo-override
+  labels:
+    app: demo-override-nginx
+spec:
+  type: ClusterIP
+  selector:
+    app: demo-override-nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

@@ -1,0 +1,44 @@
+apiVersion: policy.karmada.io/v1alpha1
+kind: OverridePolicy
+metadata:
+  name: demo-override-nginx-env
+  namespace: demo-override
+spec:
+  resourceSelectors:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: demo-override-nginx
+  overrideRules:
+    - targetCluster:
+        clusterNames:
+          - twinx
+      overriders:
+        plaintext:
+          - path: /spec/template/spec/containers/0/env/0/value
+            operator: replace
+            value: twinx
+          - path: /spec/template/spec/containers/0/env/1/value
+            operator: replace
+            value: rendering
+    - targetCluster:
+        clusterNames:
+          - edgex
+      overriders:
+        plaintext:
+          - path: /spec/template/spec/containers/0/env/0/value
+            operator: replace
+            value: edgex
+          - path: /spec/template/spec/containers/0/env/1/value
+            operator: replace
+            value: edge
+    - targetCluster:
+        clusterNames:
+          - datax
+      overriders:
+        plaintext:
+          - path: /spec/template/spec/containers/0/env/0/value
+            operator: replace
+            value: datax
+          - path: /spec/template/spec/containers/0/env/1/value
+            operator: replace
+            value: data

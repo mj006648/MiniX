@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-override-nginx
+  namespace: demo-override
+  labels:
+    app: demo-override-nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: demo-override-nginx
+  template:
+    metadata:
+      labels:
+        app: demo-override-nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          env:
+            - name: CLUSTER_ROLE
+              value: default
+            - name: WORKLOAD_TYPE
+              value: default
+          ports:
+            - containerPort: 80
