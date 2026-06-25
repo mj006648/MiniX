@@ -30,6 +30,12 @@ member2       : 애플리케이션 배포 대상 클러스터 2
 
 ---
 
+## 관련 문서
+
+- [MiniX 기반 멀티클러스터 로드맵](../docs/architecture/multicluster-roadmap.md)
+
+---
+
 ## 학습/실험 로드맵
 
 ### 1단계. Karmada 기본 개념 정리
