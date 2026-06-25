@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-cluster-failover-nginx
+  namespace: demo-cluster-failover
+  labels:
+    app: demo-cluster-failover-nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: demo-cluster-failover-nginx
+  template:
+    metadata:
+      labels:
+        app: demo-cluster-failover-nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          ports:
+            - containerPort: 80
