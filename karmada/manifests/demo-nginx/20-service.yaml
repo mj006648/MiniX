@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-nginx
+  namespace: demo
+  labels:
+    app: demo-nginx
+spec:
+  type: ClusterIP
+  selector:
+    app: demo-nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
