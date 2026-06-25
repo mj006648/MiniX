@@ -1,15 +1,14 @@
 apiVersion: policy.karmada.io/v1alpha1
 kind: ClusterPropagationPolicy
 metadata:
-  name: demo-namespace-policy
+  name: demo-twinx-namespace-policy
 spec:
   resourceSelectors:
     - apiVersion: v1
       kind: Namespace
-      name: demo
+      name: demo-twinx
   placement:
     clusterAffinity:
-      clusterNames:
-        - twinx
-        - edgex
-        - datax
+      labelSelector:
+        matchLabels:
+          scalex.io/role: gpu-render

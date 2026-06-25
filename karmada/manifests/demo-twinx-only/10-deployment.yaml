@@ -1,19 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: demo-nginx
-  namespace: demo
+  name: demo-twinx-nginx
+  namespace: demo-twinx
   labels:
-    app: demo-nginx
+    app: demo-twinx-nginx
+    scalex.io/target: twinx
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
-      app: demo-nginx
+      app: demo-twinx-nginx
   template:
     metadata:
       labels:
-        app: demo-nginx
+        app: demo-twinx-nginx
+        scalex.io/target: twinx
     spec:
       containers:
         - name: nginx

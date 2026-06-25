@@ -7,10 +7,10 @@
 | 파일 | 설명 |
 | --- | --- |
 | `00-namespace.yaml` | demo 네임스페이스 생성 |
-| `01-cluster-propagation-policy-namespace.yaml` | demo 네임스페이스를 member1/member2로 전파 |
+| `01-cluster-propagation-policy-namespace.yaml` | demo 네임스페이스를 twinx/edgex/datax로 전파 |
 | `10-deployment.yaml` | nginx Deployment 생성 |
 | `20-service.yaml` | nginx ClusterIP Service 생성 |
-| `30-propagation-policy.yaml` | member1/member2로 리소스 전파 |
+| `30-propagation-policy.yaml` | twinx/edgex/datax로 리소스 전파 |
 
 ## 적용 대상
 
@@ -19,17 +19,18 @@
 예:
 
 ```bash
-kubectl --kubeconfig /etc/karmada/karmada-apiserver.config apply -f karmada/manifests/demo-nginx/
+kubectl --kubeconfig ~/.kube/karmada-apiserver.config apply -f karmada/manifests/demo-nginx/
 ```
 
 ## 확인
 
 ```bash
-kubectl --context kind-member1 get all -n demo
-kubectl --context kind-member2 get all -n demo
+kubectl --context kind-twinx get all -n demo
+kubectl --context kind-edgex get all -n demo
+kubectl --context kind-datax get all -n demo
 ```
 
 예상 결과:
 
-- `demo-nginx` Deployment가 member1/member2에 생성된다.
-- Deployment replica 2개가 `PropagationPolicy`에 따라 두 클러스터로 나뉘어 배치된다.
+- `demo-nginx` Deployment가 twinx/edgex/datax에 생성된다.
+- Deployment replica 3개가 `PropagationPolicy`에 따라 세 클러스터로 나뉘어 배치된다.

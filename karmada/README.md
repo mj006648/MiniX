@@ -1,38 +1,42 @@
 # Karmada 실험실
 
-이 디렉터리는 MiniX 환경에서 **Karmada 멀티클러스터 오케스트레이션**을 연습하고, 실험 과정과 결과를 기록하기 위한 공간입니다.
+이 디렉터리는 **ScaleX-POD 멀티클러스터**를 만들기 전에, MiniX Lab에서 **Karmada 멀티클러스터 오케스트레이션**을 연습하고 실험 과정과 결과를 기록하기 위한 공간입니다.
 
-> 목표: 기존 MiniX/ArgoCD 기반 GitOps 구조를 유지하면서, Karmada를 이용해 여러 Kubernetes 클러스터에 애플리케이션을 전파/스케줄링/장애조치하는 흐름을 단계적으로 이해한다.
+> 목표: 작은 MiniX 실험 환경에서 Karmada를 먼저 이해한 뒤, 실제 ScaleX-POD 안의 Tower / TwinX / EdgeX / DataX / Resource Pool 구조로 확장할 수 있는 GitOps 흐름을 검증한다.
 
 ---
 
 ## 현재 상태
 
 - 작성일: 2026-06-25
-- 상태: 계획 수립 단계
-- 실제 Karmada 설치: 아직 진행 전
-- 우선 실험 방식: `kind` 기반 로컬 멀티클러스터 실습 권장
+- 상태: 실험 00 kind 기반 ScaleX-POD 축소 Karmada Lab 1차 성공
+- 실제 Karmada 설치: `kind-tower`에 설치 완료
+- 우선 실험 방식: `kind` 기반 로컬 멀티클러스터 실습
+- 최종 적용 대상: ScaleX-POD 멀티클러스터
+- 특이사항: Docker/kind 설치, inotify limit, context 전환, Karmada CLI 설치, Namespace binding 상태 이슈를 실험 문서에 기록
 
 ---
 
-## 왜 바로 MiniX 클러스터에 붙이지 않는가?
+## 왜 바로 ScaleX-POD 또는 MiniX 실클러스터에 붙이지 않는가?
 
-MiniX에는 이미 ArgoCD, Rook Ceph, Confluent, Trino, Milvus, Ollama 등 무거운 컴포넌트가 많다.
-처음부터 실클러스터를 Karmada 멤버로 붙이면 원인 파악이 어려워질 수 있으므로, 먼저 가벼운 `kind` 클러스터로 Karmada의 동작 원리를 확인한다.
+ScaleX-POD는 Tower / TwinX / EdgeX / DataX / Resource Pool이 합쳐진 실제 멀티클러스터 단위다.
+또한 MiniX에도 ArgoCD, Rook Ceph, Confluent, Trino, Milvus, Ollama 등 무거운 컴포넌트가 많다.
+처음부터 실제 클러스터를 Karmada 멤버로 붙이면 원인 파악이 어려워질 수 있으므로, 먼저 가벼운 `kind` 클러스터로 Karmada의 동작 원리를 확인한다.
 
 권장 첫 실험 구조:
 
 ```text
-karmada-host  : Karmada control plane 설치용 클러스터
-member1       : 애플리케이션 배포 대상 클러스터 1
-member2       : 애플리케이션 배포 대상 클러스터 2
+tower  : Karmada control plane / Tower 축소판
+twinx  : TwinX 역할의 member cluster
+edgex  : EdgeX 역할의 member cluster
+datax  : DataX 역할의 member cluster
 ```
 
 ---
 
 ## 관련 문서
 
-- [MiniX 기반 멀티클러스터 로드맵](../docs/architecture/multicluster-roadmap.md)
+- [MiniX Lab에서 ScaleX-POD 멀티클러스터까지의 검증 로드맵](../docs/architecture/multicluster-roadmap.md)
 
 ---
 
@@ -57,15 +61,16 @@ member2       : 애플리케이션 배포 대상 클러스터 2
 
 목표:
 
-- `karmada-host`, `member1`, `member2` 클러스터 생성
+- `tower`, `twinx`, `edgex`, `datax` 클러스터 생성
 - 각 클러스터 kubeconfig/context 확인
 
 예상 명령:
 
 ```bash
-kind create cluster --name karmada-host
-kind create cluster --name member1
-kind create cluster --name member2
+kind create cluster --name tower
+kind create cluster --name twinx
+kind create cluster --name edgex
+kind create cluster --name datax
 
 kubectl config get-contexts
 ```
@@ -73,6 +78,12 @@ kubectl config get-contexts
 관련 기록:
 
 - [`experiments/2026-06-25-00-kind-lab-plan.md`](./experiments/2026-06-25-00-kind-lab-plan.md)
+  - kind cluster 구성
+  - 실행 명령
+  - 기대 결과
+  - 실제 결과 기록 위치
+  - 문제/에러 기록 형식
+  - ScaleX-POD에 주는 의미
 
 ---
 
@@ -81,14 +92,15 @@ kubectl config get-contexts
 목표:
 
 - `karmadactl` 또는 `kubectl-karmada` 설치
-- `karmada-host` 클러스터에 Karmada control plane 설치
+- `tower` 클러스터에 Karmada control plane 설치
 
 예상 명령:
 
 ```bash
-curl -s https://raw.githubusercontent.com/karmada-io/karmada/master/hack/install-cli.sh | sudo bash
+curl -s https://raw.githubusercontent.com/karmada-io/karmada/master/hack/install-cli.sh \
+  | sudo bash -s kubectl-karmada
 
-kubectl config use-context kind-karmada-host
+kubectl config use-context kind-tower
 kubectl karmada init
 ```
 
@@ -106,13 +118,13 @@ kubectl get statefulsets -n karmada-system
 
 목표:
 
-- `member1`, `member2`를 Karmada에 등록
+- `twinx`, `edgex`, `datax`를 Karmada에 등록
 - Push 모드부터 실습
 
 예상 확인:
 
 ```bash
-kubectl --kubeconfig /etc/karmada/karmada-apiserver.config get clusters
+kubectl --kubeconfig ~/.kube/karmada-apiserver.config get clusters
 ```
 
 ---
@@ -122,7 +134,7 @@ kubectl --kubeconfig /etc/karmada/karmada-apiserver.config get clusters
 목표:
 
 - Karmada API server에 일반 Kubernetes Deployment/Service를 생성
-- PropagationPolicy로 `member1`, `member2`에 배포
+- PropagationPolicy로 `twinx`, `edgex`, `datax`에 배포
 - replica 분산이 어떻게 되는지 확인
 
 예제 매니페스트 위치:
@@ -135,17 +147,24 @@ kubectl --kubeconfig /etc/karmada/karmada-apiserver.config get clusters
 
 목표:
 
-현재 ArgoCD 흐름:
+현재 MiniX의 단순 ArgoCD 흐름:
 
 ```text
-ArgoCD -> MiniX cluster에 직접 배포
+ArgoCD -> MiniX 단일 클러스터에 직접 배포
 ```
 
-Karmada 실험 후 목표 흐름:
+ScaleX-POD에서 목표로 하는 흐름:
 
 ```text
-ArgoCD -> Karmada API server에 배포
-       -> Karmada가 member cluster로 전파
+ArgoCD on Tower -> Karmada API server on Tower
+                 -> Karmada가 TwinX / EdgeX / DataX / Resource Pool로 전파
+```
+
+MiniX/kind 실험에서는 위 구조를 아래처럼 축소해서 검증한다.
+
+```text
+ArgoCD 또는 kubectl -> Karmada API server
+                    -> twinx / edgex / datax로 전파
 ```
 
 검증할 것:
@@ -159,6 +178,14 @@ ArgoCD -> Karmada API server에 배포
 ## 실험 기록 방식
 
 각 실험은 `experiments/` 아래에 날짜별 Markdown으로 기록한다.
+단순히 성공/실패만 쓰지 않고, 아래를 반드시 남긴다.
+
+- 무엇을 확인하려는 실험인지
+- 어떤 명령을 실행했는지
+- 성공하면 어떤 결과가 나와야 하는지
+- 실제 출력은 어땠는지
+- 실패했다면 어디서 막혔고 어떻게 해결했는지
+- ScaleX-POD 설계에 어떤 의미가 있는지
 
 권장 형식:
 
@@ -171,11 +198,17 @@ ArgoCD -> Karmada API server에 배포
 
 ## 실행 명령
 
-## 결과
+## 기대 결과
+
+## 실제 결과
+
+## 성공/실패 판단
 
 ## 문제/에러
 
 ## 해결 방법
+
+## ScaleX-POD에 주는 의미
 
 ## 다음 액션
 ```

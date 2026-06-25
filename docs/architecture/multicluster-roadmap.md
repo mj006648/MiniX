@@ -1,12 +1,39 @@
-# MiniX 기반 멀티클러스터 로드맵
+# MiniX Lab에서 ScaleX-POD 멀티클러스터까지의 검증 로드맵
 
-이 문서는 최종적으로 구성하려는 `TWINX / EDGEX / DATAX / RESOURCE POOL / TOWER CLUSTER` 구조를 정리하고, 이를 바로 실환경에 적용하기 전에 **MiniX에서 먼저 검증할 실험 계획**을 기록한다.
+이 문서는 **ScaleX-POD 멀티클러스터**를 만들기 전에, 작은 실험 환경인 **MiniX**에서 ArgoCD, Karmada, Kueue, GitOps 흐름을 먼저 검증하는 계획을 정리한다.
+
+> 용어 정리: 여기서 `ScaleX-POD`는 Kubernetes의 Pod 리소스가 아니라, `Tower / TwinX / EdgeX / DataX / Resource Pool`이 합쳐진 **하나의 멀티클러스터 운영 단위**를 뜻한다.
 
 ---
 
-## 1. 전체 방향
+## 1. 핵심 용어
 
-최종 목표는 여러 목적별 Kubernetes 클러스터를 하나의 운영 체계로 묶는 것이다.
+| 용어 | 의미 |
+| --- | --- |
+| **MiniX** | ScaleX-POD를 만들기 전에 실험하는 작은 단일 클러스터/Lab 환경 |
+| **ScaleX-POD** | 실제 목표 멀티클러스터 단위. Tower, TwinX, EdgeX, DataX, Resource Pool이 함께 구성된다. |
+| **Tower Cluster** | ScaleX-POD의 관리/제어 클러스터. ArgoCD, Karmada, ESO, Observability 등을 담당한다. |
+| **TwinX Cluster** | GPU 렌더링/미디어 처리/렌더링 Job을 담당하는 클러스터 |
+| **EdgeX Cluster** | Edge GPU/AI inference/현장 장비 연동을 담당하는 클러스터 |
+| **DataX Cluster** | Data Lake/Lakehouse, Object Storage, Spark, Trino, Iceberg 등을 담당하는 데이터 클러스터 |
+| **Resource Pool** | GPU/CPU 자원을 논리적으로 묶은 풀. 필요하면 별도 클러스터가 될 수 있고, 초기에는 label/taint/Kueue ResourceFlavor로 표현할 수 있다. |
+
+정리하면 다음과 같다.
+
+```text
+MiniX
+  = 사전 검증용 작은 Lab
+
+ScaleX-POD
+  = 실제 멀티클러스터
+  = Tower + TwinX + EdgeX + DataX + Resource Pool
+```
+
+---
+
+## 2. 전체 방향
+
+최종 목표는 목적별 Kubernetes 클러스터를 하나의 **ScaleX-POD 멀티클러스터**로 묶는 것이다.
 
 핵심 구성 요소:
 
@@ -20,41 +47,45 @@
 큰 그림:
 
 ```text
-GitHub MiniX Repository
+GitHub MiniX / ScaleX Infra Repository
         |
         v
-+-------------------------------+
-| TOWER CLUSTER                 |
-| - ArgoCD                      |
-| - Karmada Control Plane       |
-| - ESO                         |
-| - Observability               |
-| - Kueue Manager, optional     |
-+-------------------------------+
-        |
-        | 멀티클러스터 제어 / GitOps / 정책 배포
-        v
-+-------------+   +-------------+   +-------------+
-| TWINX       |   | EDGEX       |   | DATAX       |
-| GPU Render  |   | Edge/GPU    |   | Data Lake   |
-+-------------+   +-------------+   +-------------+
-        |
-        v
-+-------------------------------+
-| RESOURCE POOL                 |
-| - GPU Pool                    |
-| - CPU Pool                    |
-| - Batch / AI / Spark Jobs     |
-+-------------------------------+
++---------------------------------------------------+
+| ScaleX-POD                                        |
+|                                                   |
+|  +---------------------------------------------+  |
+|  | Tower Cluster                               |  |
+|  | - ArgoCD                                    |  |
+|  | - Karmada Control Plane                     |  |
+|  | - ESO                                       |  |
+|  | - Observability                             |  |
+|  | - Kueue Manager, optional                   |  |
+|  +---------------------------------------------+  |
+|          |                                        |
+|          | 멀티클러스터 제어 / GitOps / 정책 배포 |
+|          v                                        |
+|  +-------------+   +-------------+   +---------+  |
+|  | TwinX       |   | EdgeX       |   | DataX   |  |
+|  | GPU Render  |   | Edge/GPU    |   | Data    |  |
+|  +-------------+   +-------------+   +---------+  |
+|          |                                        |
+|          v                                        |
+|  +---------------------------------------------+  |
+|  | Resource Pool                               |  |
+|  | - GPU Pool                                  |  |
+|  | - CPU Pool                                  |  |
+|  | - Batch / AI / Spark Jobs                   |  |
+|  +---------------------------------------------+  |
++---------------------------------------------------+
 ```
 
 ---
 
-## 2. 클러스터별 역할
+## 3. ScaleX-POD 구성요소별 역할
 
-## 2.1 TOWER CLUSTER
+### 3.1 Tower Cluster
 
-관리 전용 클러스터다.
+ScaleX-POD의 관리 전용 클러스터다.
 
 여기에는 실제 서비스 워크로드보다는 운영/제어 컴포넌트를 배치한다.
 
@@ -72,7 +103,7 @@ GitHub MiniX Repository
 역할:
 
 - GitHub repo를 source of truth로 사용
-- 여러 클러스터에 공통 정책 배포
+- ScaleX-POD 내부 여러 클러스터에 공통 정책 배포
 - Karmada를 통한 멀티클러스터 전파
 - Secret, 인증서, 모니터링, 배포 상태 통합 관리
 
@@ -91,7 +122,7 @@ GitHub MiniX Repository
 
 ---
 
-## 2.2 TWINX CLUSTER
+### 3.2 TwinX Cluster
 
 GPU 렌더링 전용 클러스터다.
 
@@ -120,7 +151,7 @@ GPU 렌더링 전용 클러스터다.
 
 ---
 
-## 2.3 EDGEX CLUSTER
+### 3.3 EdgeX Cluster
 
 Edge 전용 클러스터다.
 
@@ -147,7 +178,7 @@ Edge 전용 클러스터다.
 
 ---
 
-## 2.4 DATAX CLUSTER
+### 3.4 DataX Cluster
 
 대용량 데이터 저장/처리 전용 클러스터다.
 
@@ -178,7 +209,7 @@ Edge 전용 클러스터다.
 
 ---
 
-## 2.5 RESOURCE POOL
+### 3.5 Resource Pool
 
 GPU/CPU 자원을 논리적으로 묶어 사용하는 영역이다.
 
@@ -214,10 +245,10 @@ Karmada 관점:
 
 ---
 
-## 3. MiniX에서 먼저 검증할 이유
+## 4. MiniX에서 먼저 검증할 이유
 
-최종 구조는 규모가 크기 때문에 바로 적용하면 문제 원인 파악이 어렵다.
-따라서 MiniX에서 축소판을 먼저 만든다.
+ScaleX-POD는 실제 멀티클러스터 구조이기 때문에 바로 적용하면 문제 원인 파악이 어렵다.
+따라서 먼저 작은 실험 환경인 MiniX에서 GitOps, Karmada, Kueue 흐름을 축소 검증한다.
 
 MiniX에서 검증할 것:
 
@@ -229,34 +260,34 @@ MiniX에서 검증할 것:
 - ArgoCD가 Karmada API Server로 배포하는 구조 검증
 - 관리 클러스터와 워커 클러스터 역할 분리
 
-MiniX 실험 구조:
+MiniX/Karmada 실험 구조:
 
 ```text
-MiniX 또는 kind/k3d lab
+MiniX Lab
 
-mgmt 또는 karmada-host
-  - ArgoCD
-  - Karmada Control Plane
-  - Kueue manager, optional
+실제 MiniX
+  - 작은 단일 클러스터
+  - ArgoCD/GitOps/Kueue 등을 먼저 검증하는 장소
 
-member1
-  - 일반 workload 실행
-  - Kueue worker/local queue
-
-member2
-  - 일반 workload 실행
-  - Kueue worker/local queue
+Karmada 동작 실험용 kind/k3d lab
+  - tower: Karmada control plane / Tower 축소판
+  - twinx: TwinX 역할의 member cluster
+  - edgex: EdgeX 역할의 member cluster
+  - datax: DataX 역할의 member cluster
 ```
+
+이 kind/k3d lab은 실제 ScaleX-POD가 아니라, ScaleX-POD에 들어갈 Karmada 동작을 미리 확인하는 축소 실험이다.
 
 ---
 
-## 4. 단계별 진행 계획
+## 5. 단계별 진행 계획
 
-## Phase 0. 문서화 및 현재 구조 정리
+### Phase 0. 문서화 및 현재 구조 정리
 
 목표:
 
-- MiniX repo에 멀티클러스터 구상 정리
+- `MiniX`와 `ScaleX-POD` 용어 분리
+- ScaleX-POD가 멀티클러스터 단위임을 명확히 정리
 - Karmada 실험 디렉터리 구성
 - 실험 기록 방식 통일
 
@@ -264,17 +295,17 @@ member2
 
 - `karmada/` 디렉터리 생성 완료
 - Karmada 기본 개념/실험 계획 문서화 완료
-- 이 문서에서 전체 X-Cluster 로드맵 정리
+- 이 문서에서 MiniX Lab → ScaleX-POD 멀티클러스터 로드맵 정리
 
 ---
 
-## Phase 1. Karmada 기초 실험
+### Phase 1. Karmada 기초 실험
 
 목표:
 
-- kind 기반 `karmada-host`, `member1`, `member2` 생성
+- kind 기반 `tower`, `twinx`, `edgex`, `datax` 생성
 - Karmada init
-- member cluster join
+- twinx/edgex/datax member cluster join
 - demo-nginx 전파
 
 검증 항목:
@@ -291,25 +322,43 @@ karmada/manifests/demo-nginx/
 karmada/experiments/
 ```
 
+첫 실행 계획서:
+
+- [`karmada/experiments/2026-06-25-00-kind-lab-plan.md`](../../karmada/experiments/2026-06-25-00-kind-lab-plan.md)
+
+이 문서에는 실행 순서, 명령어, 기대 결과, 실제 결과 기록 위치, 문제/에러 기록 형식, ScaleX-POD에 주는 의미를 함께 기록한다.
+
 ---
 
-## Phase 2. ArgoCD + Karmada 연동
+### Phase 2. ArgoCD + Karmada 연동
 
 목표:
 
 ArgoCD가 직접 member cluster에 배포하는 것이 아니라, Karmada API Server에 배포하도록 구성한다.
 
-기존 흐름:
+MiniX의 단순 흐름:
 
 ```text
-ArgoCD -> Kubernetes Cluster
+ArgoCD -> MiniX 단일 클러스터
 ```
 
-목표 흐름:
+ScaleX-POD 목표 흐름:
 
 ```text
-ArgoCD -> Karmada API Server -> member clusters
+ArgoCD on Tower
+  -> Karmada API Server on Tower
+    -> TwinX / EdgeX / DataX / Resource Pool
 ```
+
+역할 분리:
+
+```text
+ArgoCD  = Git 변경 감지, diff/sync/rollback, app-of-apps 등 GitOps 담당
+Karmada = ScaleX-POD 안에서 cluster placement, replica 분산, override, failover 담당
+```
+
+따라서 ArgoCD는 Karmada API Server에 리소스와 정책을 sync하고,
+Karmada는 그 리소스를 TwinX / EdgeX / DataX / Resource Pool로 전파한다.
 
 검증 항목:
 
@@ -319,7 +368,7 @@ ArgoCD -> Karmada API Server -> member clusters
 
 ---
 
-## Phase 3. Kueue 단일 클러스터 실험
+### Phase 3. Kueue 단일 클러스터 실험
 
 목표:
 
@@ -343,7 +392,7 @@ Kueue를 먼저 단일 클러스터에서 이해한다.
 
 ---
 
-## Phase 4. Karmada + Kueue 조합 실험
+### Phase 4. Karmada + Kueue 조합 실험
 
 목표:
 
@@ -365,9 +414,9 @@ ArgoCD
 
 ---
 
-## Phase 5. MiniX 실제 앱 일부 적용
+### Phase 5. MiniX 실제 앱 일부 적용
 
-처음부터 전체 MiniX 앱을 옮기지 않는다.
+처음부터 전체 MiniX 앱을 Karmada로 옮기지 않는다.
 
 우선순위:
 
@@ -382,58 +431,62 @@ Rook Ceph, Confluent, Milvus 같은 무거운 stateful 시스템은 마지막에
 
 ---
 
-## 5. 최종 목표 아키텍처
+### Phase 6. ScaleX-POD 설계 확정
 
-장기 목표:
+MiniX에서 충분히 검증한 뒤, 실제 ScaleX-POD 멀티클러스터 구성을 확정한다.
 
-```text
-TOWER CLUSTER
-  - GitOps / Control Plane / Secrets / Observability
-  - ArgoCD
-  - Karmada
-  - ESO
-  - Monitoring
-
-TWINX CLUSTER
-  - GPU Rendering
-  - Kueue GPU queues
-
-EDGEX CLUSTER
-  - Edge GPU/AI compute
-  - Pull mode candidate
-
-DATAX CLUSTER
-  - SSD/HDD PB-scale storage
-  - Lakehouse / Spark / Trino / Iceberg
-
-RESOURCE POOL
-  - GPU/CPU 자원을 논리적으로 분류
-  - Kueue ResourceFlavor/ClusterQueue로 quota 관리
-  - Karmada cluster label로 배치 정책 관리
-```
-
----
-
-## 6. 우선 결정해야 할 것
-
-아직 결정이 필요한 부분:
+결정할 것:
 
 - Tower Cluster를 `k3s`로 갈지 `kubeadm`으로 갈지
 - Karmada member 연결은 Push부터 할지 Pull까지 볼지
 - Kueue MultiKueue를 사용할지, Karmada 중심으로 갈지
 - Secret 관리는 ESO + Vault로 갈지, ESO + GitHub/Cloud Secret으로 갈지
 - GPU Pool을 별도 클러스터로 둘지, 각 클러스터 node label로 표현할지
-- DATAX storage를 Rook Ceph 중심으로 갈지 별도 NAS/Object Storage와 연동할지
+- DataX storage를 Rook Ceph 중심으로 갈지 별도 NAS/Object Storage와 연동할지
 
-현재 추천:
+---
+
+## 6. 최종 목표 아키텍처
+
+장기 목표는 하나의 ScaleX-POD 안에 다음 멀티클러스터 구성을 갖추는 것이다.
+
+```text
+ScaleX-POD
+
+Tower Cluster
+  - GitOps / Control Plane / Secrets / Observability
+  - ArgoCD
+  - Karmada
+  - ESO
+  - Monitoring
+
+TwinX Cluster
+  - GPU Rendering
+  - Kueue GPU queues
+
+EdgeX Cluster
+  - Edge GPU/AI compute
+  - Pull mode candidate
+
+DataX Cluster
+  - SSD/HDD PB-scale storage
+  - Lakehouse / Spark / Trino / Iceberg
+
+Resource Pool
+  - GPU/CPU 자원을 논리적으로 분류
+  - Kueue ResourceFlavor/ClusterQueue로 quota 관리
+  - Karmada cluster label로 배치 정책 관리
+```
+
+현재 추천 순서:
 
 ```text
 1. MiniX/kind에서 Karmada 단독 검증
 2. Kueue 단일 클러스터 검증
 3. ArgoCD로 GitOps화
 4. Karmada + Kueue 조합 검증
-5. Tower Cluster 설계 확정
-6. TWINX / EDGEX / DATAX 확장
+5. ScaleX-POD의 Tower 설계 확정
+6. TwinX / EdgeX / DataX / Resource Pool을 ScaleX-POD member로 확장
 ```
 
 ---

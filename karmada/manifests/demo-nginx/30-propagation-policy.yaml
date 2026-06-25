@@ -14,8 +14,9 @@ spec:
   placement:
     clusterAffinity:
       clusterNames:
-        - member1
-        - member2
+        - twinx
+        - edgex
+        - datax
     replicaScheduling:
       replicaSchedulingType: Divided
       replicaDivisionPreference: Weighted
@@ -23,9 +24,13 @@ spec:
         staticWeightList:
           - targetCluster:
               clusterNames:
-                - member1
+                - twinx
             weight: 1
           - targetCluster:
               clusterNames:
-                - member2
+                - edgex
+            weight: 1
+          - targetCluster:
+              clusterNames:
+                - datax
             weight: 1
