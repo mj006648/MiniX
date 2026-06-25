@@ -37,6 +37,7 @@ datax  : DataX 역할의 member cluster
 ## 관련 문서
 
 - [MiniX Lab에서 ScaleX-POD 멀티클러스터까지의 검증 로드맵](../docs/architecture/multicluster-roadmap.md)
+- [Karmada 실험 진행표](./experiments/README.md)
 
 ---
 
@@ -89,6 +90,8 @@ kubectl config get-contexts
   - Namespace가 edgex/datax에도 생성되는 관찰 이슈 기록
 - [`experiments/2026-06-25-02-namespace-auto-propagation.md`](./experiments/2026-06-25-02-namespace-auto-propagation.md)
   - Namespace 전파 정책 없이 namespaced workload만 전파할 때 namespace 자동 생성 범위 확인
+- [`experiments/2026-06-25-03-weighted-replica-scheduling.md`](./experiments/2026-06-25-03-weighted-replica-scheduling.md)
+  - `replicaScheduling`의 `Divided + Weighted`로 twinx/edgex/datax replica 가중 분산 검증
 
 ---
 

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-weighted-nginx
+  namespace: demo-weighted
+  labels:
+    app: demo-weighted-nginx
+spec:
+  type: ClusterIP
+  selector:
+    app: demo-weighted-nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
