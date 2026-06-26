@@ -9,11 +9,11 @@
 ## 현재 상태
 
 - 작성일: 2026-06-25
-- 상태: 실험 09까지 완료, WorkloadRebalancer 재균형 검증 완료
+- 상태: 실험 10까지 완료, NoExecute 영향 범위와 clusterTolerations 보호 검증 완료
 - 실제 Karmada 설치: `kind-tower`에 설치 완료
 - 우선 실험 방식: `kind` 기반 로컬 멀티클러스터 실습
 - 최종 적용 대상: ScaleX-POD 멀티클러스터
-- 특이사항: Docker/kind 설치, inotify limit, context 전환, Karmada CLI 설치, Namespace binding 상태 이슈, Work 조회 kubeconfig 차이, cluster taint/실제 장애에서 기존 workload eviction 미확인, Failover feature gate 실험, 수동 NoExecute eviction 성공 및 taint 제거 후 자동 재균형 없음, WorkloadRebalancer로 복구 cluster 재분산 성공, controller-manager anti-affinity rollout 이슈, scheduler-estimator 로그를 실험 문서에 기록
+- 특이사항: Docker/kind 설치, inotify limit, context 전환, Karmada CLI 설치, Namespace binding 상태 이슈, Work 조회 kubeconfig 차이, cluster taint/실제 장애에서 기존 workload eviction 미확인, Failover feature gate 실험, 수동 NoExecute eviction 성공 및 taint 제거 후 자동 재균형 없음, WorkloadRebalancer로 복구 cluster 재분산 성공, clusterTolerations로 NoExecute 보호 검증, controller-manager anti-affinity rollout 이슈, scheduler-estimator 로그를 실험 문서에 기록
 
 ---
 
@@ -109,6 +109,9 @@ kubectl config get-contexts
 - [`experiments/2026-06-26-09-workload-rebalancer-reschedule.md`](./experiments/2026-06-26-09-workload-rebalancer-reschedule.md)
   - `WorkloadRebalancer`로 복구된 `twinx`까지 workload 재균형 검증
   - `edgex=2`, `datax=1`, `twinx=0` 상태를 `twinx=1`, `edgex=1`, `datax=1`로 복구
+- [`experiments/2026-06-26-10-noexecute-toleration-scope.md`](./experiments/2026-06-26-10-noexecute-toleration-scope.md)
+  - 수동 `NoExecute` taint의 cluster 전체 영향과 `clusterTolerations` 보호 동작 검증
+  - toleration 없는 workload는 `twinx`에서 이동하고, matching toleration 있는 workload는 `twinx`에 유지됨
 
 ---
 

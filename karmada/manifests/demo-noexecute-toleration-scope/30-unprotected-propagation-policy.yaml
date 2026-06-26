@@ -1,0 +1,39 @@
+apiVersion: policy.karmada.io/v1alpha1
+kind: PropagationPolicy
+metadata:
+  name: demo-noexecute-unprotected-nginx-policy
+  namespace: demo-noexecute-unprotected
+spec:
+  failover:
+    cluster:
+      purgeMode: Directly
+  resourceSelectors:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: demo-noexecute-unprotected-nginx
+    - apiVersion: v1
+      kind: Service
+      name: demo-noexecute-unprotected-nginx
+  placement:
+    clusterAffinity:
+      clusterNames:
+        - twinx
+        - edgex
+        - datax
+    replicaScheduling:
+      replicaSchedulingType: Divided
+      replicaDivisionPreference: Weighted
+      weightPreference:
+        staticWeightList:
+          - targetCluster:
+              clusterNames:
+                - twinx
+            weight: 1
+          - targetCluster:
+              clusterNames:
+                - edgex
+            weight: 1
+          - targetCluster:
+              clusterNames:
+                - datax
+            weight: 1

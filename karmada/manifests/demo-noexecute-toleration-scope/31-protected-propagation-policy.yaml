@@ -1,0 +1,44 @@
+apiVersion: policy.karmada.io/v1alpha1
+kind: PropagationPolicy
+metadata:
+  name: demo-noexecute-protected-nginx-policy
+  namespace: demo-noexecute-protected
+spec:
+  failover:
+    cluster:
+      purgeMode: Directly
+  resourceSelectors:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: demo-noexecute-protected-nginx
+    - apiVersion: v1
+      kind: Service
+      name: demo-noexecute-protected-nginx
+  placement:
+    clusterAffinity:
+      clusterNames:
+        - twinx
+        - edgex
+        - datax
+    clusterTolerations:
+      - key: scalex.io/eviction-test
+        operator: Equal
+        value: protected
+        effect: NoExecute
+    replicaScheduling:
+      replicaSchedulingType: Divided
+      replicaDivisionPreference: Weighted
+      weightPreference:
+        staticWeightList:
+          - targetCluster:
+              clusterNames:
+                - twinx
+            weight: 1
+          - targetCluster:
+              clusterNames:
+                - edgex
+            weight: 1
+          - targetCluster:
+              clusterNames:
+                - datax
+            weight: 1

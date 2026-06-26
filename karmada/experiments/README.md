@@ -32,6 +32,7 @@
 | 07 | [`2026-06-26-07-failover-feature-gate.md`](./2026-06-26-07-failover-feature-gate.md) | Failover feature gate 재실험 | 부분 성공 | 옵션 활성화 후에도 실제 장애 자동 taint는 NoSchedule, 기존 workload 자동 이동은 미확인 |
 | 08 | [`2026-06-26-08-noexecute-eviction.md`](./2026-06-26-08-noexecute-eviction.md) | 수동 NoExecute taint eviction | 성공/주의 필요 | NoExecute taint는 기존 twinx workload를 edgex/datax로 이동시킴, taint 제거 후 자동 재균형은 없음 |
 | 09 | [`2026-06-26-09-workload-rebalancer-reschedule.md`](./2026-06-26-09-workload-rebalancer-reschedule.md) | WorkloadRebalancer 재균형 | 성공 | NoExecute 후 edgex/datax에 남은 workload를 twinx/edgex/datax=1:1:1로 재균형 |
+| 10 | [`2026-06-26-10-noexecute-toleration-scope.md`](./2026-06-26-10-noexecute-toleration-scope.md) | NoExecute 영향 범위와 toleration | 성공/주의 필요 | toleration 없는 workload는 이동, matching toleration 있는 workload는 twinx 유지 |
 
 ---
 
@@ -39,8 +40,8 @@
 
 | 우선순위 | 주제 | ScaleX-POD에서 의미 |
 | --- | --- | --- |
-| 1 | NoExecute 영향 범위/toleration 설계 | cluster 전체 eviction 영향 제어와 제외 workload 설계 |
-| 2 | 여러 workload WorkloadRebalancer | 장애/복구 후 여러 workload를 한 번에 재균형하는 운영 절차 확인 |
+| 1 | 여러 workload WorkloadRebalancer | 장애/복구 후 여러 workload를 한 번에 재균형하는 운영 절차 확인 |
+| 2 | ScaleX-POD role label placement | TwinX/EdgeX/DataX/Resource Pool 역할 기반 배치 고도화 |
 | 3 | scheduler-estimator 정리 | estimator 설치 또는 scheduler estimator 비활성화 필요성 확인 |
 | 4 | OverridePolicy image/storageClass | EdgeX/DataX/TwinX별 image registry와 storageClass 차이 반영 |
 | 5 | spreadConstraints | zone/role/provider 기준 분산 배치 |
@@ -53,8 +54,8 @@
 ## 현재 우선순위
 
 ```text
-1. NoExecute 영향 범위/toleration 설계
-2. 여러 workload WorkloadRebalancer
+1. 여러 workload WorkloadRebalancer
+2. ScaleX-POD role label placement
 3. scheduler-estimator 정리
 4. OverridePolicy image/storageClass
 5. ArgoCD 연동

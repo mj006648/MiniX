@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-noexecute-unprotected-nginx
+  namespace: demo-noexecute-unprotected
+  labels:
+    app: demo-noexecute-unprotected-nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: demo-noexecute-unprotected-nginx
+  template:
+    metadata:
+      labels:
+        app: demo-noexecute-unprotected-nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
