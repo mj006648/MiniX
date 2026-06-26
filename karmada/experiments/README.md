@@ -29,6 +29,7 @@
 | 04 | [`2026-06-25-04-override-policy-env.md`](./2026-06-25-04-override-policy-env.md) | OverridePolicy env 변경 | 성공 | 같은 Deployment를 twinx/edgex/datax에 배포하면서 cluster별 env를 다르게 적용 |
 | 05 | [`2026-06-25-05-cluster-taint-failover.md`](./2026-06-25-05-cluster-taint-failover.md) | cluster taint/toleration/failover | 부분 성공 | 새 workload는 taint된 twinx를 회피, toleration workload는 twinx 허용, 기존 workload 자동 eviction은 미확인 |
 | 06 | [`2026-06-25-06-actual-cluster-failover.md`](./2026-06-25-06-actual-cluster-failover.md) | 실제 member cluster 장애 | 부분 성공 | twinx 장애 감지/복구는 성공, 기존 workload 자동 failover는 현재 controller 옵션에서 미확인 |
+| 07 | [`2026-06-26-07-failover-feature-gate.md`](./2026-06-26-07-failover-feature-gate.md) | Failover feature gate 재실험 | 부분 성공 | 옵션 활성화 후에도 실제 장애 자동 taint는 NoSchedule, 기존 workload 자동 이동은 미확인 |
 
 ---
 
@@ -36,26 +37,24 @@
 
 | 우선순위 | 주제 | ScaleX-POD에서 의미 |
 | --- | --- | --- |
-| 1 | Failover feature gate 재실험 | `--feature-gates=Failover=true` 활성화 후 기존 workload 이동 검증 |
-| 2 | NoExecute eviction 재실험 | `--enable-no-execute-taint-eviction=true`와 수동 NoExecute taint eviction 확인 |
-| 3 | WorkloadRebalancer / reschedule | 장애 복구 후 또는 정책 변경 후 기존 ResourceBinding 재균형 |
-| 4 | scheduler-estimator 정리 | estimator 설치 또는 scheduler estimator 비활성화 필요성 확인 |
-| 5 | OverridePolicy image/storageClass | EdgeX/DataX/TwinX별 image registry와 storageClass 차이 반영 |
-| 6 | spreadConstraints | zone/role/provider 기준 분산 배치 |
-| 7 | ArgoCD -> Karmada API Server | GitOps 흐름 검증 |
-| 8 | Kueue와 조합 | cluster 배치는 Karmada, cluster 내부 job admission은 Kueue로 분리 |
-| 9 | Pull mode | EdgeX처럼 외부에서 직접 접근하기 어려운 cluster 후보 검증 |
+| 1 | NoExecute eviction 단독 실험 | 수동 `NoExecute` taint에서 기존 ResourceBinding eviction이 실제 동작하는지 확인 |
+| 2 | WorkloadRebalancer / reschedule | 장애 복구 후 또는 정책 변경 후 기존 ResourceBinding 재균형 |
+| 3 | scheduler-estimator 정리 | estimator 설치 또는 scheduler estimator 비활성화 필요성 확인 |
+| 4 | OverridePolicy image/storageClass | EdgeX/DataX/TwinX별 image registry와 storageClass 차이 반영 |
+| 5 | spreadConstraints | zone/role/provider 기준 분산 배치 |
+| 6 | ArgoCD -> Karmada API Server | GitOps 흐름 검증 |
+| 7 | Kueue와 조합 | cluster 배치는 Karmada, cluster 내부 job admission은 Kueue로 분리 |
+| 8 | Pull mode | EdgeX처럼 외부에서 직접 접근하기 어려운 cluster 후보 검증 |
 
 ---
 
 ## 현재 우선순위
 
 ```text
-1. Failover feature gate 재실험
-2. NoExecute eviction 재실험
-3. WorkloadRebalancer / reschedule
-4. scheduler-estimator 정리
-5. OverridePolicy image/storageClass
-6. ArgoCD 연동
-7. Pull mode 후보 검토
+1. NoExecute eviction 단독 실험
+2. WorkloadRebalancer / reschedule
+3. scheduler-estimator 정리
+4. OverridePolicy image/storageClass
+5. ArgoCD 연동
+6. Pull mode 후보 검토
 ```

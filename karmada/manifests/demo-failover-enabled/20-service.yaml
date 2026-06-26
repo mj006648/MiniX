@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-failover-enabled-nginx
+  namespace: demo-failover-enabled
+  labels:
+    app: demo-failover-enabled-nginx
+spec:
+  type: ClusterIP
+  selector:
+    app: demo-failover-enabled-nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

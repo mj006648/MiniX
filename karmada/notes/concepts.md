@@ -857,7 +857,8 @@ TwinX 장애
 - 모든 workload가 자동으로 완벽하게 무중단 이전되는 것은 아니다.
 - 수동 cluster taint는 새 scheduling에는 반영되지만, 이미 배치된 workload eviction은 별도 failover/rebalance 조건을 더 확인해야 한다.
 - MiniX kind lab 실험 06에서는 실제 `twinx` API 장애가 `READY=False`와 `cluster.karmada.io/not-ready:NoSchedule`로 감지되었지만, 현재 controller 옵션에서는 기존 ResourceBinding 자동 이동이 확인되지 않았다.
-- `Failover` feature gate, `NoExecute` taint eviction, WorkloadRebalancer 설정을 추가 검증해야 한다.
+- MiniX kind lab 실험 07에서 `Failover=true`와 `--enable-no-execute-taint-eviction=true`를 켜도 실제 cluster offline 자동 taint는 `NoSchedule`이었고 기존 ResourceBinding 자동 이동은 확인되지 않았다.
+- 따라서 기존 workload 이동은 수동/정책 기반 `NoExecute` eviction 또는 WorkloadRebalancer 설정을 추가 검증해야 한다.
 - stateful workload는 storage, data locality, network 설계를 같이 봐야 한다.
 
 ### 13.4 Global Uniform Resource View

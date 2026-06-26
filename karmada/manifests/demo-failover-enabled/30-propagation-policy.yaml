@@ -1,0 +1,39 @@
+apiVersion: policy.karmada.io/v1alpha1
+kind: PropagationPolicy
+metadata:
+  name: demo-failover-enabled-nginx-policy
+  namespace: demo-failover-enabled
+spec:
+  failover:
+    cluster:
+      purgeMode: Directly
+  resourceSelectors:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: demo-failover-enabled-nginx
+    - apiVersion: v1
+      kind: Service
+      name: demo-failover-enabled-nginx
+  placement:
+    clusterAffinity:
+      clusterNames:
+        - twinx
+        - edgex
+        - datax
+    replicaScheduling:
+      replicaSchedulingType: Divided
+      replicaDivisionPreference: Weighted
+      weightPreference:
+        staticWeightList:
+          - targetCluster:
+              clusterNames:
+                - twinx
+            weight: 1
+          - targetCluster:
+              clusterNames:
+                - edgex
+            weight: 1
+          - targetCluster:
+              clusterNames:
+                - datax
+            weight: 1
