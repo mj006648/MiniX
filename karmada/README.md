@@ -9,11 +9,11 @@
 ## 현재 상태
 
 - 작성일: 2026-06-25
-- 상태: 실험 07까지 완료, Failover feature gate 활성화 재실험 완료
+- 상태: 실험 08까지 완료, 수동 NoExecute taint eviction 검증 완료
 - 실제 Karmada 설치: `kind-tower`에 설치 완료
 - 우선 실험 방식: `kind` 기반 로컬 멀티클러스터 실습
 - 최종 적용 대상: ScaleX-POD 멀티클러스터
-- 특이사항: Docker/kind 설치, inotify limit, context 전환, Karmada CLI 설치, Namespace binding 상태 이슈, Work 조회 kubeconfig 차이, cluster taint/실제 장애에서 기존 workload eviction 미확인, Failover feature gate 실험, controller-manager anti-affinity rollout 이슈, scheduler-estimator 로그를 실험 문서에 기록
+- 특이사항: Docker/kind 설치, inotify limit, context 전환, Karmada CLI 설치, Namespace binding 상태 이슈, Work 조회 kubeconfig 차이, cluster taint/실제 장애에서 기존 workload eviction 미확인, Failover feature gate 실험, 수동 NoExecute eviction 성공 및 taint 제거 후 자동 재균형 없음, controller-manager anti-affinity rollout 이슈, scheduler-estimator 로그를 실험 문서에 기록
 
 ---
 
@@ -103,6 +103,9 @@ kubectl config get-contexts
 - [`experiments/2026-06-26-07-failover-feature-gate.md`](./experiments/2026-06-26-07-failover-feature-gate.md)
   - `Failover=true`, `enable-no-execute-taint-eviction=true` 옵션 활성화 후 실제 장애 재실험
   - 실제 cluster offline 자동 taint가 `NoSchedule`이라 기존 workload 자동 eviction은 확인되지 않음
+- [`experiments/2026-06-26-08-noexecute-eviction.md`](./experiments/2026-06-26-08-noexecute-eviction.md)
+  - 수동 `NoExecute` taint와 controller-manager eviction 옵션으로 기존 workload 이동 검증
+  - `twinx` workload가 `edgex/datax`로 이동했으며, taint 제거 후 자동 재균형은 확인되지 않음
 
 ---
 

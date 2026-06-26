@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-noexecute-eviction-nginx
+  namespace: demo-noexecute-eviction
+  labels:
+    app: demo-noexecute-eviction-nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: demo-noexecute-eviction-nginx
+  template:
+    metadata:
+      labels:
+        app: demo-noexecute-eviction-nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
