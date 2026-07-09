@@ -10,6 +10,15 @@
 - Nucleus DATA_ROOT 후보 경로 `/var/lib/omni/nucleus-data`에 PVC 마운트
 - 컨테이너는 임시 `python:3.12-alpine` hold/web container 사용
 
+
+## 현재 클러스터 주의사항
+
+2026-07-09 기준 가  상태라 신규 Pod가 일반 scheduler 경로로 배치되지 않는다.
+PoC에서는 RBD PVC 마운트와 StatefulSet 구조 검증을 먼저 하기 위해 임시로 을 지정했다.
+
+- 최종 운영 전에는 을 제거해야 한다.
+- kube-scheduler가 정상화되면 일반 scheduler가 node labels/taints/affinity 기준으로 Pod를 배치한다.
+
 ## 다음 단계
 
 NGC Enterprise Nucleus compose artifact 확보 후 다음 항목을 교체한다.

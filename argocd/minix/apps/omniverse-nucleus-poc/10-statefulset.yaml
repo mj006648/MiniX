@@ -24,6 +24,10 @@ spec:
         app.kubernetes.io/part-of: omniverse
         scalex.io/poc: nucleus-statefulset-rbd
     spec:
+      # TEMP: kube-scheduler is currently CrashLoopBackOff on this cluster.
+      # Pin the PoC pod to a Ready worker to verify StatefulSet + RBD mount first.
+      # Remove this after kube-scheduler is healthy.
+      nodeName: com1
       terminationGracePeriodSeconds: 30
       containers:
         - name: nucleus-placeholder
