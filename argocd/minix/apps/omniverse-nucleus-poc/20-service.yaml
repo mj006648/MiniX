@@ -16,7 +16,7 @@ spec:
   ports:
   - name: web
     port: 8080
-    targetPort: 8080
+    targetPort: 80
   - name: api
     port: 3009
     targetPort: 3009

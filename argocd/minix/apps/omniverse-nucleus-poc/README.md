@@ -82,6 +82,11 @@ curl http://127.0.0.1:8080/
    - 원인: Docker Compose에서는 같은 네트워크 안의 컨테이너 포트가 바로 보이지만, Kubernetes Service는 `ports`에 명시된 포트만 프록시한다.
    - 해결: 외부 LoadBalancer가 아니라 내부 `nucleus-api` ClusterIP Service에만 `service-api` 포트 3006을 추가했다. 이 포트는 관리용 성격이 있으므로 외부 노출 금지.
 
+
+5. LoadBalancer 8080이 Navigator UI가 아니라 metrics로 연결됨
+   - 원인: 같은 Pod 안에서 `utl-monpx`가 8080을 사용하고, Nucleus Navigator UI는 80을 사용한다. Service `targetPort: 8080`은 Pod IP의 8080으로 가므로 metrics가 응답했다.
+   - 해결: 외부 접속 주소는 `http://10.34.48.221:8080/` 그대로 두고, `omniverse-nucleus` LoadBalancer Service의 `web` 포트 `targetPort`만 80으로 변경했다.
+
 ### 남은 작업
 
 - kube-scheduler / kube-controller-manager CrashLoop 원인 복구
