@@ -188,3 +188,54 @@ kubectl -n omniverse logs omniverse-nucleus-0 -c nucleus-api --tail=100
 kubectl -n omniverse logs omniverse-nucleus-0 -c nucleus-auth --tail=100
 kubectl -n omniverse port-forward svc/omniverse-nucleus 8080:8080
 ```
+
+
+## 2026-07-09 최종 검증 결과: 실제 Nucleus + RBD + MetalLB
+
+검증 당시 manifest Git revision: `4ba532c4` (`fix: route Nucleus web port to Navigator`)
+
+검증 상태:
+
+```text
+ArgoCD Application: omniverse-nucleus-poc / Synced / Healthy
+StatefulSet: omniverse-nucleus / 1/1 Ready
+Pod: omniverse-nucleus-0 / 12/12 Running / node=com3
+PVC: nucleus-data-omniverse-nucleus-0 / rook-ceph-block / 10Gi / Bound
+LoadBalancer IP: 10.34.48.221
+Web URL: http://10.34.48.221:8080/
+```
+
+HTTP 검증:
+
+```bash
+curl -fsS -D - http://10.34.48.221:8080/
+```
+
+응답 요약:
+
+```text
+HTTP/1.1 200 OK
+Server: nginx/1.28.1
+<title>Omniverse Navigator</title>
+<base id="public-url" href="http://10.34.48.221:8080/" />
+```
+
+이번 PoC에서 실제로 확인한 것:
+
+- NVIDIA NGC Enterprise Nucleus Compose Stack `2023.2.10` artifact 기반 실제 이미지 사용
+- Compose의 12개 서비스를 Kubernetes StatefulSet의 12개 컨테이너로 구동
+- Rook-Ceph RBD PVC를 Nucleus DATA_ROOT로 마운트
+- MetalLB LoadBalancer IP `10.34.48.221`로 외부 접속 노출
+- 내부 Compose DNS 대체용 ClusterIP Service 구성
+- Kubernetes와 Compose 차이로 발생한 bootstrap 문제 해결
+  - Ready 전 Endpoint 필요: `publishNotReadyAddresses: true`
+  - 내부 Service API 3006 필요: `nucleus-api` ClusterIP에만 `service-api` 포트 추가
+  - Navigator UI 포트 보정: 외부 8080 -> Pod targetPort 80
+
+주의:
+
+- 현재 `nodeName: com3`는 kube-scheduler / kube-controller-manager 불안정 상태를 우회하기 위한 임시 설정이다.
+- 운영 전에는 control-plane 안정화 후 `nodeName`을 제거하고 node affinity/toleration/resource request 기반으로 배치해야 한다.
+- `nvcr-io`, `nucleus-secrets`, `nucleus-passwords`는 Git에 넣지 않고 런타임 Secret으로 생성했다. 운영 전에는 OpenBao + External-Secrets로 이관해야 한다.
+- NGC API Key 또는 Docker registry credential은 개인 키를 그대로 재사용하지 말고, 테스트 후 revoke/rotate하고 조직 정책에 맞게 Secret Store에 넣어야 한다.
+
