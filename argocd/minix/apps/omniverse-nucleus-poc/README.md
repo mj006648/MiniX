@@ -4,11 +4,12 @@
 
 ## 현재 범위
 
-- 실제 Nucleus 이미지 사용 전 단계
+- NVIDIA NGC `nvidia/omniverse/nucleus-compose-stack:2023.2.10` 기반 실제 Nucleus 서비스 사용
+- Compose stack의 12개 서비스를 Kubernetes StatefulSet의 12개 컨테이너로 변환
 - `rook-ceph-block` RBD StorageClass 사용
 - `volumeClaimTemplates`로 Pod 전용 PVC 생성
-- Nucleus DATA_ROOT 후보 경로 `/var/lib/omni/nucleus-data`에 PVC 마운트
-- 컨테이너는 임시 `python:3.12-alpine` hold/web container 사용
+- Nucleus DATA_ROOT `/var/lib/omni/nucleus-data`를 RBD PVC로 마운트
+- `nvcr.io/nvidia/omniverse/*` 실제 Nucleus 이미지 사용
 
 
 ## 현재 클러스터 주의사항
@@ -21,14 +22,14 @@ PoC에서는 RBD PVC 마운트와 StatefulSet 구조 검증을 먼저 하기 위
 
 ## 다음 단계
 
-NGC Enterprise Nucleus compose artifact 확보 후 다음 항목을 교체한다.
+현재는 NGC artifact를 확보했고 실제 이미지를 사용한다. 다음 항목은 아직 운영화 전 보완 대상이다.
 
-- image
-- command/args
-- env / nucleus-stack.env
-- secrets
-- exposed ports
-- readiness/liveness probe
+- kube-scheduler 정상화 후 `nodeName: com1` 제거
+- `SERVER_IP_OR_HOST`를 실제 접속 도메인/IP로 변경
+- TLS/Ingress 또는 NodePort/LoadBalancer 노출 방식 결정
+- Nucleus admin/service password를 OpenBao/External-Secrets로 이관
+- readiness/liveness probe 추가
+- PVC 용량을 운영 크기로 확장
 
 ## 확인 명령
 
@@ -76,6 +77,82 @@ curl http://127.0.0.1:8080/
 
 - kube-scheduler / kube-controller-manager CrashLoop 원인 복구
 - scheduler 복구 후 10-statefulset.yaml에서 nodeName: com1 제거
-- NVIDIA NGC Enterprise Nucleus artifact 확보
-- placeholder python container를 실제 Nucleus 이미지/compose 구성/secret/env/probe로 교체
+- 실제 접속 도메인/IP와 TLS/Ingress 노출 방식 확정
+- readiness/liveness probe 추가
 - 실제 운영 전에 Nucleus 데이터 백업/복구 절차 확정
+
+## 실제 Nucleus 전환 내역
+
+2026-07-09에 placeholder `python:3.12-alpine` 컨테이너를 제거하고 NVIDIA Enterprise Nucleus Compose Stack 기반 구성으로 전환했다.
+
+### 사용한 artifact
+
+```bash
+ngc registry resource download-version nvidia/omniverse/nucleus-compose-stack:2023.2.10
+```
+
+다운로드 위치는 로컬 작업용이며 Git에는 커밋하지 않는다.
+
+```text
+.artifacts/ngc/nucleus-compose-stack_v2023.2.10/
+.artifacts/nucleus-stack-2023.2.10/
+```
+
+### 실제 이미지
+
+현재 StatefulSet에는 다음 실제 NVIDIA Nucleus 이미지가 들어간다.
+
+```text
+nvcr.io/nvidia/omniverse/nucleus-api:1.14.55
+nvcr.io/nvidia/omniverse/nucleus-lft:1.14.55
+nvcr.io/nvidia/omniverse/nucleus-lft-lb:1.14.55
+nvcr.io/nvidia/omniverse/nucleus-log-processor:1.14.55
+nvcr.io/nvidia/omniverse/nucleus-resolver-cache:1.14.55
+nvcr.io/nvidia/omniverse/utl-monpx:1.14.55
+nvcr.io/nvidia/omniverse/nucleus-discovery:1.5.6
+nvcr.io/nvidia/omniverse/nucleus-auth:1.5.9
+nvcr.io/nvidia/omniverse/nucleus-navigator:3.3.7
+nvcr.io/nvidia/omniverse/nucleus-search:3.2.14
+nvcr.io/nvidia/omniverse/nucleus-thumbnails:1.5.15
+nvcr.io/nvidia/omniverse/nucleus-tagging:3.1.36
+```
+
+### Runtime Secret
+
+다음 Secret은 Git에 넣지 않고 클러스터에 직접 생성했다.
+
+```text
+nvcr-io             # nvcr.io imagePullSecret
+nucleus-secrets     # auth signing key, discovery token, salts, SAML blank metadata
+nucleus-passwords   # admin/service password
+```
+
+관리자 계정은 compose 기본값에 맞춰 `omniverse`이다. 비밀번호는 아래 명령으로 클러스터에서 조회한다.
+
+```bash
+kubectl -n omniverse get secret nucleus-passwords   -o jsonpath='{.data.master-password}' | base64 -d; echo
+```
+
+### 배포 구조
+
+```text
+ArgoCD Application omniverse-nucleus-poc
+  -> StatefulSet omniverse-nucleus
+     -> 12 containers from NVIDIA Nucleus Compose Stack
+     -> PVC nucleus-data-omniverse-nucleus-0
+        -> rook-ceph-block RBD
+        -> /var/lib/omni/nucleus-data
+  -> Service omniverse-nucleus
+  -> Internal Services nucleus-api, nucleus-auth, nucleus-discovery, ...
+```
+
+### 검증 명령
+
+```bash
+kubectl -n argocd get app omniverse-nucleus-poc -o wide
+kubectl -n omniverse get sts,pvc,pod,svc -o wide
+kubectl -n omniverse get pod omniverse-nucleus-0 -o jsonpath='{range .status.containerStatuses[*]}{.name}{"\t"}{.ready}{"\t"}{.state}{"\n"}{end}'
+kubectl -n omniverse logs omniverse-nucleus-0 -c nucleus-api --tail=100
+kubectl -n omniverse logs omniverse-nucleus-0 -c nucleus-auth --tail=100
+kubectl -n omniverse port-forward svc/omniverse-nucleus 8080:8080
+```

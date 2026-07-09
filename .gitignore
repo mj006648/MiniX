@@ -3,3 +3,6 @@
 trident-ui/streamlit/
 trident-ui/__pycache__/
 *.pyc
+
+# Local downloaded NGC/Nucleus artifacts
+.artifacts/

@@ -6,33 +6,51 @@ metadata:
   namespace: omniverse
   labels:
     app.kubernetes.io/name: omniverse-nucleus
-    app.kubernetes.io/component: service
+    app.kubernetes.io/part-of: omniverse
 spec:
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
   ports:
-    - name: web
-      port: 8080
-      targetPort: web
-    - name: api-3009
-      port: 3009
-      targetPort: api-3009
-    - name: api-3019
-      port: 3019
-      targetPort: api-3019
-    - name: lft
-      port: 3030
-      targetPort: lft
-    - name: auth-3100
-      port: 3100
-      targetPort: auth-3100
-    - name: auth-3180
-      port: 3180
-      targetPort: auth-3180
-    - name: discovery
-      port: 3333
-      targetPort: discovery
-    - name: search
-      port: 3400
-      targetPort: search
+  - name: web
+    port: 8080
+    targetPort: 8080
+  - name: api
+    port: 3009
+    targetPort: 3009
+  - name: api2
+    port: 3019
+    targetPort: 3019
+  - name: svc-auth
+    port: 3106
+    targetPort: 3106
+  - name: lft
+    port: 3030
+    targetPort: 3030
+  - name: auth
+    port: 3100
+    targetPort: 3100
+  - name: login
+    port: 3180
+    targetPort: 3180
+  - name: auth-api
+    port: 8000
+    targetPort: 8000
+  - name: discovery
+    port: 3333
+    targetPort: 3333
+  - name: search
+    port: 3400
+    targetPort: 3400
+  - name: tagging
+    port: 3020
+    targetPort: 3020
+  - name: metrics
+    port: 3010
+    targetPort: 3010
+  - name: prom
+    port: 9500
+    targetPort: 9500
+  - name: resolver
+    port: 8891
+    targetPort: 8891

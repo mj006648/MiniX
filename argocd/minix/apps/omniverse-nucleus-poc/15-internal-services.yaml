@@ -1,0 +1,202 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-api
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: api
+    port: 3009
+    targetPort: 3009
+  - name: metrics
+    port: 3010
+    targetPort: 3010
+  - name: svc-auth
+    port: 3106
+    targetPort: 3106
+  - name: prom
+    port: 9500
+    targetPort: 9500
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-lft
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-lft
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: lft
+    port: 3030
+    targetPort: 3030
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-lft-lb
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-lft-lb
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: lft
+    port: 3030
+    targetPort: 3030
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-log-processor
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-log-processor
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: prom
+    port: 9500
+    targetPort: 9500
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-resolver-cache
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-resolver-cache
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: resolver
+    port: 8891
+    targetPort: 8891
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: utl-monpx
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: utl-monpx
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: web
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-discovery
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-discovery
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: discovery
+    port: 3333
+    targetPort: 3333
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-auth
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-auth
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: auth
+    port: 3100
+    targetPort: 3100
+  - name: login
+    port: 3180
+    targetPort: 3180
+  - name: auth-api
+    port: 8000
+    targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-navigator
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-navigator
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: web-internal
+    port: 80
+    targetPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-search
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-search
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: search
+    port: 3400
+    targetPort: 3400
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-tagging
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: nucleus-tagging
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+  - name: tagging
+    port: 3020
+    targetPort: 3020

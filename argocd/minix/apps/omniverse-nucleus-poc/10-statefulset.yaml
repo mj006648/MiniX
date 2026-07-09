@@ -4,7 +4,7 @@ kind: StatefulSet
 metadata:
   name: omniverse-nucleus
   namespace: omniverse
-  labels:
+  labels: &id001
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/part-of: omniverse
     scalex.io/poc: nucleus-statefulset-rbd
@@ -19,87 +19,803 @@ spec:
       app.kubernetes.io/name: omniverse-nucleus
   template:
     metadata:
-      labels:
-        app.kubernetes.io/name: omniverse-nucleus
-        app.kubernetes.io/part-of: omniverse
-        scalex.io/poc: nucleus-statefulset-rbd
+      labels: *id001
     spec:
-      # TEMP: kube-scheduler is currently CrashLoopBackOff on this cluster.
-      # Pin the PoC pod to a Ready worker to verify StatefulSet + RBD mount first.
-      # Remove this after kube-scheduler is healthy.
+      imagePullSecrets:
+      - name: nvcr-io
       nodeName: com1
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 60
+      initContainers:
+      - name: init-nucleus-data
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - mkdir -p /data/data /data/log/api /data/log/lft /data/log/thumbnails /data/log/tagging
+          /data/scratch/meta-dump /data/empty /data/resolver-cache /data/local-accounts-db
+          /data/tags-db /data/tmp/tagging && chmod -R 0777 /data
+        volumeMounts:
+        - name: nucleus-data
+          mountPath: /data
       containers:
-        - name: nucleus-placeholder
-          image: python:3.12-alpine
-          imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -c
-            - |
-              set -eu
-              mkdir -p /var/lib/omni/nucleus-data/.poc
-              if [ ! -f /var/lib/omni/nucleus-data/.poc/created-at.txt ]; then
-                date -Is > /var/lib/omni/nucleus-data/.poc/created-at.txt
-              fi
-              echo "started-at=$(date -Is)" >> /var/lib/omni/nucleus-data/.poc/starts.log
-              cat > /var/lib/omni/nucleus-data/index.html <<HTML
-              <html><body>
-              <h1>Omniverse Nucleus StatefulSet PoC</h1>
-              <p>This is a placeholder container. Replace image/env/command with NVIDIA Nucleus after NGC artifact is available.</p>
-              <pre>$(cat /var/lib/omni/nucleus-data/.poc/created-at.txt)</pre>
-              </body></html>
-              HTML
-              python -m http.server 8080 --directory /var/lib/omni/nucleus-data
-          ports:
-            - name: web
-              containerPort: 8080
-            - name: api-3009
-              containerPort: 3009
-            - name: api-3019
-              containerPort: 3019
-            - name: lft
-              containerPort: 3030
-            - name: auth-3100
-              containerPort: 3100
-            - name: auth-3180
-              containerPort: 3180
-            - name: discovery
-              containerPort: 3333
-            - name: search
-              containerPort: 3400
-          volumeMounts:
-            - name: nucleus-data
-              mountPath: /var/lib/omni/nucleus-data
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
-          readinessProbe:
-            httpGet:
-              path: /
-              port: web
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /
-              port: web
-            initialDelaySeconds: 20
-            periodSeconds: 20
-  volumeClaimTemplates:
-    - metadata:
-        name: nucleus-data
-        labels:
-          app.kubernetes.io/name: omniverse-nucleus
-          scalex.io/poc: nucleus-statefulset-rbd
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        storageClassName: rook-ceph-block
+      - name: nucleus-api
+        image: nvcr.io/nvidia/omniverse/nucleus-api:1.14.55
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: SECURITY_REVIEWED
+          value: '1'
+        - name: OMNI_INSTANCE
+          value: minix_nucleus
+        - name: OMNI_LFT_ADDRESS
+          value: http://*:3030
+        - name: OMNI_LFT_THRESHOLD
+          value: '1024'
+        - name: OMNI_CONTENT_RAM_SZ
+          value: '6'
+        - name: OMNI_NUCLEUS_CORE_THREADS_COUNT
+          value: '4'
+        - name: OMNI_LAUNCHER_PROMETHEUS_PORT
+          value: '9500'
+        - name: OMNI_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: OMNI_ENABLE_TEST_USER
+          value: '0'
+        - name: OMNI_AUTH_JWT_PUBKEY
+          value: /omni/secrets/jwt_pubkey.pub
+        - name: OMNI_S3_RESOLVER_CACHE
+          value: http://nucleus-resolver-cache:8891
+        - name: OMNI_CRASHENABLEUPLOADING
+          value: '0'
+        - name: OMNI_CRASHREPORTERENABLED
+          value: '0'
+        - name: OMNI_ENABLE_MOUNT_RESOLVER_LOGGING
+          value: '0'
+        - name: OMNI_VERSIONING
+          value: '1'
+        - name: OMNI_OO_MODE
+          value: '0'
+        - name: OMNI_DEFAULT_S3_PROXY_CACHE
+          value: http://nucleus-resolver-cache:8891
+        - name: OMNI_CONTENT_MOUNT_ENABLED
+          value: '1'
+        - name: OMNI_S3_MOUNT_PATH
+          value: /NVIDIA
+        - name: OMNI_S3_SECURE
+          value: '1'
+        - name: OMNI_S3_HOST
+          value: content-production.omniverse.nvidia.com
+        - name: OMNI_S3_BUCKET
+          value: ''
+        - name: OMNI_S3_REGION
+          value: ''
+        - name: OMNI_CONTENT_MOUNT_BUCKET_USE_CREDENTIALS
+          value: '0'
+        - name: OMNI_S3_ACCESS_KEY_ID
+          value: ''
+        - name: OMNI_S3_SECRET_ACCESS_KEY
+          value: ''
+        - name: OMNI_S3_RELAXED_XML_PARSING
+          value: '0'
+        - name: OMNI_STRUCTURED_LOGGING
+          value: '0'
+        - name: OMNI_MAX_IN_FLIGHT_REQUESTS
+          value: '0'
+        - name: OMNI_NUCLEUS_DISCOVERY_HOST
+          value: nucleus-discovery
+        - name: OMNI_NUCLEUS_DISCOVERY_SERVICE_DEPLOYMENTS
+          value: "reg: \n  - name: external\n    transport:\n      type: connlib\n\
+            \      params: \n        url: ws://omniverse-nucleus.omniverse.svc.cluster.local:3009\n\
+            \n  - name: internal \n    transport: \n      type: connlib\n      params:\
+            \ \n        url: ws://omniverse-nucleus.omniverse.svc.cluster.local:3009\n"
+        - name: OMNI_NUCLEUS_DISCOVERY_TOKEN_FILE
+          value: /omni/secrets/discovery_token
+        - name: OMNI_NUCLEUS_SERVICE_AUTH_DEPLOYMENT_LOOKUP
+          value: internal
+        volumeMounts:
+        - name: nucleus-data
+          mountPath: /omni/data
+          subPath: data
+        - name: nucleus-data
+          mountPath: /omni/log
+          subPath: log/api
+        - name: nucleus-data
+          mountPath: /omni/scratch-meta-dump
+          subPath: scratch/meta-dump
+        - name: nucleus-data
+          mountPath: /var/lib/omni/nucleus-data/empty
+          subPath: empty
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/jwt_pubkey.pub
+          subPath: auth_root_of_trust.pub
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/discovery_token
+          subPath: svc_reg_token
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/lft_salt
+          subPath: lft_salt
+          readOnly: true
         resources:
           requests:
-            storage: 10Gi
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-lft
+        image: nvcr.io/nvidia/omniverse/nucleus-lft:1.14.55
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: OMNI_LFT_AUTH_PUBLIC_KEY
+          value: /omni/secrets/jwt_pubkey.pub
+        - name: OMNI_LFT_COMPRESSION
+          value: '0'
+        - name: OMNI_LFT_STRUCTURED_LOGGING
+          value: '0'
+        volumeMounts:
+        - name: nucleus-data
+          mountPath: /omni/log
+          subPath: log/lft
+        - name: nucleus-data
+          mountPath: /omni/data
+          subPath: data
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/jwt_pubkey.pub
+          subPath: auth_root_of_trust.pub
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/lft_salt
+          subPath: lft_salt
+          readOnly: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-lft-lb
+        image: nvcr.io/nvidia/omniverse/nucleus-lft-lb:1.14.55
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: NGINX_WORKER_PROCESSES
+          value: auto
+        - name: NGINX_WORKER_CONNECTIONS
+          value: '10240'
+        - name: NGINX_MAX_BODY_SIZE
+          value: 10m
+        - name: OMNI_LFT_RR_HOSTNAME
+          value: nucleus-lft
+        - name: OMNI_LFT_PORT
+          value: '3030'
+        volumeMounts: []
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-log-processor
+        image: nvcr.io/nvidia/omniverse/nucleus-log-processor:1.14.55
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: OMNI_INSTANCE
+          value: minix_nucleus
+        - name: OMNI_PROCESS_LFT_LOGS
+          value: '1'
+        - name: OMNI_STRUCTURED_LOGGING
+          value: '0'
+        volumeMounts:
+        - name: nucleus-data
+          mountPath: /omni/log
+          subPath: log
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-resolver-cache
+        image: nvcr.io/nvidia/omniverse/nucleus-resolver-cache:1.14.55
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        volumeMounts:
+        - name: nucleus-data
+          mountPath: /omni/data
+          subPath: resolver-cache
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: utl-monpx
+        image: nvcr.io/nvidia/omniverse/utl-monpx:1.14.55
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: OMNI_MONPX_SCRAPE_URLS
+          value: http://nucleus-api:9500/metrics;http://nucleus-api:3010/metrics;http://nucleus-log-processor:9500/metrics
+        - name: OMNI_MONPX_ALLOWED_METRIC_PREFIXES
+          value: omni:nginx:redis:exposer:otcollector:otelcol
+        - name: OMNI_DS_BLACKLIST_PATH
+          value: /omni/data/PathBlackList.json
+        volumeMounts:
+        - name: nucleus-data
+          mountPath: /omni/data
+          subPath: data
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-discovery
+        image: nvcr.io/nvidia/omniverse/nucleus-discovery:1.5.6
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: CANONICAL_NAME
+          value: omniverse-nucleus.omniverse.svc.cluster.local
+        - name: SERVICE_TOKEN
+          value: /omni/secrets/SERVICE_TOKEN
+        - name: SERVICE_PUBLIC_KEY
+          value: /omni/secrets/SERVICE_PUBLIC_KEY
+        - name: WS_MAX_HTTP_LINE
+          value: '65535'
+        - name: SERVICE_STRUCTURED_LOGGING
+          value: '0'
+        - name: SERVICE_DEPLOYMENTS
+          value: "reg:\n  - name: external\n    transport:\n      type: sows\n   \
+            \   params:\n        host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \        port: 3333\n\n  - name: internal\n    transport:\n      type:\
+            \ sows\n      params:\n          host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \          port: 3333\n"
+        volumeMounts:
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_TOKEN
+          subPath: svc_reg_token
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_PUBLIC_KEY
+          subPath: auth_root_of_trust.pub
+          readOnly: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-auth
+        image: nvcr.io/nvidia/omniverse/nucleus-auth:1.5.9
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: SERVICE_ACCESS_TOKEN_DURATION
+          value: '30'
+        - name: SERVICE_REFRESH_TOKEN_DURATION
+          value: '10080'
+        - name: SERVICE_PRIVATE_KEY
+          value: /omni/secrets/SERVICE_PRIVATE_KEY
+        - name: SERVICE_PUBLIC_KEY
+          value: /omni/secrets/SERVICE_PUBLIC_KEY
+        - name: SERVICE_PRIVATE_KEY_LONG_TERM_TOKENS
+          value: /omni/secrets/SERVICE_PRIVATE_KEY_LONG_TERM_TOKENS
+        - name: SERVICE_PUBLIC_KEY_LONG_TERM_TOKENS
+          value: /omni/secrets/SERVICE_PUBLIC_KEY_LONG_TERM_TOKENS
+        - name: SERVICE_SALT
+          value: /omni/secrets/SERVICE_SALT
+        - name: SERVICE_DISCOVERY_URL
+          value: ws://nucleus-discovery:3333
+        - name: SERVICE_DISCOVERY_TOKEN
+          value: /omni/secrets/SERVICE_DISCOVERY_TOKEN
+        - name: SERVICE_LOG_LEVEL
+          value: DEBUG
+        - name: CREDENTIAL_AUTO_REGISTER
+          value: 'False'
+        - name: CREDENTIAL_UI_VISIBLE
+          value: 'true'
+        - name: SERVICE_API_TOKENS_ENABLED
+          value: '0'
+        - name: SERVICE_STRUCTURED_LOGGING
+          value: '0'
+        - name: SERVICE_FASTAPI_ENABLED
+          value: '1'
+        - name: SERVICE_FASTAPI_PORT
+          value: '8000'
+        - name: SERVICE_FASTAPI_ROOT_PATH
+          value: /omni/auth/api
+        - name: WS_MAX_HTTP_LINE
+          value: '65535'
+        - name: USE_SAML_SSO
+          value: '0'
+        - name: SAML_SSO_REDIRECT
+          value: ''
+        - name: SAML_SSO_METADATA_FILE
+          value: /omni/secrets/SAML_SSO_META
+        - name: SAML_SSO_PUBLIC_NAME
+          value: My SAML SSO
+        - name: SAML_SSO_ISSUER
+          value: https://my-sso-gateway.my-company.com:443
+        - name: SAML_SSO_ACS_URL
+          value: https://my-sso-gateway.my-company.com:443/result
+        - name: SAML_SSO_DESTINATION
+          value: ''
+        - name: SAML_SSO_NAMEID_FORMAT
+          value: ''
+        - name: STATIC_MAX_HEADER_SIZE
+          value: '16380'
+        - name: USE_OPENID_SSO
+          value: '0'
+        - name: OPENID_CLIENT_ID
+          value: ''
+        - name: OPENID_CLIENT_SECRET
+          value: ''
+        - name: OPENID_ENDPOINT_AUTHORIZE
+          value: ''
+        - name: OPENID_ENDPOINT_REDIRECT
+          value: https://my-sso-gateway.my-company.com:443/openid
+        - name: OPENID_ENDPOINT_USERINFO
+          value: ''
+        - name: OPENID_ENDPOINT_ACCESS_TOKEN
+          value: ''
+        - name: OPENID_PUBLIC_NAME
+          value: My OpenID SSO
+        - name: OPENID_SCOPE
+          value: openid profile email
+        - name: OPENID_TIMEOUT
+          value: '300'
+        - name: OPENID_CLAIM_USERNAME
+          value: email
+        - name: OPENID_CLAIM_FIRST_NAME
+          value: ''
+        - name: OPENID_CLAIM_LAST_NAME
+          value: ''
+        - name: OPENID_CLAIM_EMAIL
+          value: ''
+        - name: OPENID_CLAIM_GROUPS
+          value: ''
+        - name: OPENID_FLOW
+          value: pkce,device
+        - name: USE_SSA
+          value: '0'
+        - name: SSA_ENDPOINT
+          value: ''
+        - name: SSA_USERNAME_CLAIM
+          value: sub
+        - name: SSA_JWK_CACHE_MINUTES
+          value: '15'
+        - name: PUBLIC_URL
+          value: http://omniverse-nucleus.omniverse.svc.cluster.local:3180/
+        - name: SERVICE_DEPLOYMENTS
+          value: "reg:\n\n  - name: external\n    transport:\n      type: sows\n \
+            \     params:\n        host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \        port: 3100\n    meta:\n      login_url: http://omniverse-nucleus.omniverse.svc.cluster.local:3180/\n\
+            \n  - name: internal\n    transport:\n      type: sows\n      params:\n\
+            \        host: omniverse-nucleus.omniverse.svc.cluster.local\n       \
+            \ port: 3100\n"
+        - name: CREDENTIAL_USERS
+          value: "[\n  {\n    \"username\": \"omniverse\",\n    \"password\": \"$(NUCLEUS_MASTER_PASSWORD)\"\
+            ,\n    \"profile\": { \"admin\": true }\n  },\n  {\n    \"username\":\
+            \ \"tags_service\",\n    \"password\": \"$(NUCLEUS_SERVICE_PASSWORD)\"\
+            ,\n    \"profile\": { \"admin\": true, \"readonly\": true }\n  },\n  {\n\
+            \    \"username\": \"thumbnails_service\",\n    \"password\": \"$(NUCLEUS_SERVICE_PASSWORD)\"\
+            ,\n    \"profile\": { \"admin\": true, \"readonly\": true }\n  },\n  {\n\
+            \    \"username\": \"search_service\",\n    \"password\": \"$(NUCLEUS_SERVICE_PASSWORD)\"\
+            ,\n    \"profile\": { \"admin\": true, \"readonly\": true }\n  }\n]\n"
+        volumeMounts:
+        - name: nucleus-data
+          mountPath: /omni/data
+          subPath: local-accounts-db
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_PRIVATE_KEY
+          subPath: auth_root_of_trust.pem
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_PUBLIC_KEY
+          subPath: auth_root_of_trust.pub
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_PRIVATE_KEY_LONG_TERM_TOKENS
+          subPath: auth_root_of_trust_lt.pem
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_PUBLIC_KEY_LONG_TERM_TOKENS
+          subPath: auth_root_of_trust_lt.pub
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_SALT
+          subPath: pwd_salt
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_DISCOVERY_TOKEN
+          subPath: svc_reg_token
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SAML_SSO_META
+          subPath: federation.meta.blank.xml
+          readOnly: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-navigator
+        image: nvcr.io/nvidia/omniverse/nucleus-navigator:3.3.7
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: PUBLIC_URL
+          value: http://omniverse-nucleus.omniverse.svc.cluster.local:8080/
+        - name: SSL
+          value: '0'
+        - name: SETTINGS_JSON
+          value: "{\n  \"etag\": \"a66b3b6fc8bc5aa68b06f4eba0cb8c8e\",\n  \"features\"\
+            : { \"soft-delete\": 0 },\n  \"storages\": {\n    \"items\": [\n     \
+            \ {\n        \"name\": \"omniverse-nucleus.omniverse.svc.cluster.local\"\
+            ,\n        \"provider\": { \"type\": \"nucleus\" }\n      }\n    ],\n\
+            \    \"readOnly\": true\n  }\n}\n"
+        volumeMounts: []
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-search
+        image: nvcr.io/nvidia/omniverse/nucleus-search:3.2.14
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: SERVICE_BACKEND_USER
+          value: search_service
+        - name: SERVICE_BACKEND_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: SERVICE_HOST
+          value: 0.0.0.0
+        - name: SERVICE_PORT
+          value: '3400'
+        - name: SERVICE_DEPLOYMENTS_LOOKUP
+          value: internal
+        - name: SERVICE_DISCOVERY_TOKEN
+          value: /omni/secrets/SERVICE_DISCOVERY_TOKEN
+        - name: SERVICE_DISCOVERY_URL
+          value: ws://nucleus-discovery:3333
+        - name: SERVICE_AUTH_PUBLIC_KEY
+          value: /omni/secrets/SERVICE_AUTH_PUBLIC_KEY
+        - name: SERVICE_STRUCTURED_LOGGING
+          value: '0'
+        - name: SERVICE_USE_OMNI_CONFIG
+          value: '0'
+        - name: SERVICE_INCLUDE_MOUNTS
+          value: '0'
+        - name: SERVICE_DB_NAME
+          value: ':memory:'
+        - name: SERVICE_DEPLOYMENTS
+          value: "reg:\n  - name: external\n    transport:\n      type: sows\n   \
+            \   params:\n        host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \        port: 3400\n\n  - name: internal\n    transport:\n      type:\
+            \ sows\n      params:\n          host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \          port: 3400\n"
+        volumeMounts:
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_DISCOVERY_TOKEN
+          subPath: svc_reg_token
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_AUTH_PUBLIC_KEY
+          subPath: auth_root_of_trust.pub
+          readOnly: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-thumbnails
+        image: nvcr.io/nvidia/omniverse/nucleus-thumbnails:1.5.15
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: SERVICE_DISCOVERY_URL
+          value: ws://nucleus-discovery:3333
+        - name: SERVICE_DEPLOYMENTS_LOOKUP
+          value: internal
+        - name: SERVICE_USE_OMNI_CONFIG
+          value: 'False'
+        - name: SERVICE_STRUCTURED_LOGGING
+          value: '0'
+        - name: OV_USERNAME
+          value: thumbnails_service
+        - name: OV_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: OV_MEMORY_RESERVE
+          value: '256'
+        - name: OV_MEMORY_LIMIT
+          value: '4096'
+        - name: OV_CPU_RESERVE
+          value: '0.25'
+        - name: OV_CPU_LIMIT
+          value: '1'
+        - name: OV_SERVICE_BIND_HOST
+          value: 0.0.0.0
+        - name: OV_HOST_NAME
+          value: ''
+        - name: OV_EXCLUDE_PATHS
+          value: '[''/@'', ''/.tags/'', ''/.system/'']'
+        - name: OV_INSTANCE_NAME
+          value: minix_nucleus
+        - name: OV_LOGFILE
+          value: /omni/log/create_thumbnails.log
+        volumeMounts:
+        - name: nucleus-data
+          mountPath: /omni/log
+          subPath: log/thumbnails
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      - name: nucleus-tagging
+        image: nvcr.io/nvidia/omniverse/nucleus-tagging:3.1.36
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUCLEUS_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: master-password
+        - name: NUCLEUS_SERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: ACCEPT_EULA
+          value: '1'
+        - name: OV_HOST_NAME
+          value: ''
+        - name: OV_SERVICE_BIND_HOST
+          value: 0.0.0.0
+        - name: OV_SERVICE_BIND_PORT
+          value: '3020'
+        - name: OV_INSTANCE_NAME
+          value: minix_nucleus
+        - name: OV_USERNAME
+          value: tags_service
+        - name: OV_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nucleus-passwords
+              key: service-password
+        - name: OV_MEMORY_LIMIT
+          value: '2048'
+        - name: OV_MEMORY_RESERVE
+          value: '256'
+        - name: OV_CPU_LIMIT
+          value: '1'
+        - name: OV_CPU_RESERVE
+          value: '0.25'
+        - name: OV_REGENERATE_DB
+          value: '0'
+        - name: OV_UPDATE_TAG_FORMAT_1_0
+          value: '0'
+        - name: OV_STACK_PROMETHEUS_PORT
+          value: '2000'
+        - name: OV_LOGFILE
+          value: ''
+        - name: OV_LOGGING_LEVEL
+          value: INFO
+        - name: OV_STORAGE_BACKEND
+          value: sqlite_backend
+        - name: OV_STORAGE_BACKEND_CONFIG
+          value: '{"defrag_interval": 86400, "storage_location": "/omni/data/Tagging.db"}'
+        - name: SQLITE_TMPDIR
+          value: /omni/temp
+        - name: SERVICE_AUTH_PUBLIC_KEY
+          value: /omni/secrets/SERVICE_AUTH_PUBLIC_KEY
+        - name: SERVICE_STRUCTURED_LOGGING
+          value: '0'
+        - name: WS_MAX_HTTP_LINE
+          value: '20000'
+        - name: SERVICE_DISCOVERY_URL
+          value: ws://nucleus-discovery:3333
+        - name: SERVICE_DEPLOYMENTS_LOOKUP
+          value: internal
+        - name: OV_SERVICE_DISCOVERY_TOKEN_FILE
+          value: /omni/secrets/SERVICE_DISCOVERY_TOKEN
+        - name: OV_SERVICE_DEPLOYMENTS
+          value: "reg:\n  - name: external\n    transport:\n      type: sows\n   \
+            \   params:\n        host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \        port: 3020\n  - name: internal\n    transport:\n      params:\n\
+            \        host: omniverse-nucleus.omniverse.svc.cluster.local\n       \
+            \ port: 3020\n      type: sows\n"
+        volumeMounts:
+        - name: nucleus-data
+          mountPath: /omni/data
+          subPath: tags-db
+        - name: nucleus-data
+          mountPath: /omni/log
+          subPath: log/tagging
+        - name: nucleus-data
+          mountPath: /omni/temp
+          subPath: tmp/tagging
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_DISCOVERY_TOKEN
+          subPath: svc_reg_token
+          readOnly: true
+        - name: nucleus-secrets
+          mountPath: /omni/secrets/SERVICE_AUTH_PUBLIC_KEY
+          subPath: auth_root_of_trust.pub
+          readOnly: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      volumes:
+      - name: nucleus-secrets
+        secret:
+          secretName: nucleus-secrets
+          defaultMode: 256
+  volumeClaimTemplates:
+  - metadata:
+      name: nucleus-data
+      labels:
+        app.kubernetes.io/name: omniverse-nucleus
+        scalex.io/poc: nucleus-statefulset-rbd
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: rook-ceph-block
+      resources:
+        requests:
+          storage: 10Gi
