@@ -119,9 +119,9 @@ spec:
           value: nucleus-discovery
         - name: OMNI_NUCLEUS_DISCOVERY_SERVICE_DEPLOYMENTS
           value: "reg: \n  - name: external\n    transport:\n      type: connlib\n\
-            \      params: \n        url: ws://omniverse-nucleus.omniverse.svc.cluster.local:3009\n\
+            \      params: \n        url: ws://10.34.48.220:3009\n\
             \n  - name: internal \n    transport: \n      type: connlib\n      params:\
-            \ \n        url: ws://omniverse-nucleus.omniverse.svc.cluster.local:3009\n"
+            \ \n        url: ws://10.34.48.220:3009\n"
         - name: OMNI_NUCLEUS_DISCOVERY_TOKEN_FILE
           value: /omni/secrets/discovery_token
         - name: OMNI_NUCLEUS_SERVICE_AUTH_DEPLOYMENT_LOOKUP
@@ -346,7 +346,7 @@ spec:
         - name: ACCEPT_EULA
           value: '1'
         - name: CANONICAL_NAME
-          value: omniverse-nucleus.omniverse.svc.cluster.local
+          value: 10.34.48.220
         - name: SERVICE_TOKEN
           value: /omni/secrets/SERVICE_TOKEN
         - name: SERVICE_PUBLIC_KEY
@@ -357,9 +357,9 @@ spec:
           value: '0'
         - name: SERVICE_DEPLOYMENTS
           value: "reg:\n  - name: external\n    transport:\n      type: sows\n   \
-            \   params:\n        host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \   params:\n        host: 10.34.48.220\n\
             \        port: 3333\n\n  - name: internal\n    transport:\n      type:\
-            \ sows\n      params:\n          host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \ sows\n      params:\n          host: 10.34.48.220\n\
             \          port: 3333\n"
         volumeMounts:
         - name: nucleus-secrets
@@ -488,13 +488,13 @@ spec:
         - name: SSA_JWK_CACHE_MINUTES
           value: '15'
         - name: PUBLIC_URL
-          value: http://omniverse-nucleus.omniverse.svc.cluster.local:3180/
+          value: http://10.34.48.220:3180/
         - name: SERVICE_DEPLOYMENTS
           value: "reg:\n\n  - name: external\n    transport:\n      type: sows\n \
-            \     params:\n        host: omniverse-nucleus.omniverse.svc.cluster.local\n\
-            \        port: 3100\n    meta:\n      login_url: http://omniverse-nucleus.omniverse.svc.cluster.local:3180/\n\
+            \     params:\n        host: 10.34.48.220\n\
+            \        port: 3100\n    meta:\n      login_url: http://10.34.48.220:3180/\n\
             \n  - name: internal\n    transport:\n      type: sows\n      params:\n\
-            \        host: omniverse-nucleus.omniverse.svc.cluster.local\n       \
+            \        host: 10.34.48.220\n       \
             \ port: 3100\n"
         - name: CREDENTIAL_USERS
           value: "[\n  {\n    \"username\": \"omniverse\",\n    \"password\": \"$(NUCLEUS_MASTER_PASSWORD)\"\
@@ -561,13 +561,13 @@ spec:
         - name: ACCEPT_EULA
           value: '1'
         - name: PUBLIC_URL
-          value: http://omniverse-nucleus.omniverse.svc.cluster.local:8080/
+          value: http://10.34.48.220:8080/
         - name: SSL
           value: '0'
         - name: SETTINGS_JSON
           value: "{\n  \"etag\": \"a66b3b6fc8bc5aa68b06f4eba0cb8c8e\",\n  \"features\"\
             : { \"soft-delete\": 0 },\n  \"storages\": {\n    \"items\": [\n     \
-            \ {\n        \"name\": \"omniverse-nucleus.omniverse.svc.cluster.local\"\
+            \ {\n        \"name\": \"10.34.48.220\"\
             ,\n        \"provider\": { \"type\": \"nucleus\" }\n      }\n    ],\n\
             \    \"readOnly\": true\n  }\n}\n"
         volumeMounts: []
@@ -623,9 +623,9 @@ spec:
           value: ':memory:'
         - name: SERVICE_DEPLOYMENTS
           value: "reg:\n  - name: external\n    transport:\n      type: sows\n   \
-            \   params:\n        host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \   params:\n        host: 10.34.48.220\n\
             \        port: 3400\n\n  - name: internal\n    transport:\n      type:\
-            \ sows\n      params:\n          host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \ sows\n      params:\n          host: 10.34.48.220\n\
             \          port: 3400\n"
         volumeMounts:
         - name: nucleus-secrets
@@ -772,9 +772,9 @@ spec:
           value: /omni/secrets/SERVICE_DISCOVERY_TOKEN
         - name: OV_SERVICE_DEPLOYMENTS
           value: "reg:\n  - name: external\n    transport:\n      type: sows\n   \
-            \   params:\n        host: omniverse-nucleus.omniverse.svc.cluster.local\n\
+            \   params:\n        host: 10.34.48.220\n\
             \        port: 3020\n  - name: internal\n    transport:\n      params:\n\
-            \        host: omniverse-nucleus.omniverse.svc.cluster.local\n       \
+            \        host: 10.34.48.220\n       \
             \ port: 3020\n      type: sows\n"
         volumeMounts:
         - name: nucleus-data

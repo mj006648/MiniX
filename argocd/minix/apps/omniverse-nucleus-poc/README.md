@@ -25,8 +25,7 @@ PoC에서는 RBD PVC 마운트와 StatefulSet 구조 검증을 먼저 하기 위
 현재는 NGC artifact를 확보했고 실제 이미지를 사용한다. 다음 항목은 아직 운영화 전 보완 대상이다.
 
 - kube-scheduler 정상화 후 `nodeName: com1` 제거
-- `SERVER_IP_OR_HOST`를 실제 접속 도메인/IP로 변경
-- TLS/Ingress 또는 NodePort/LoadBalancer 노출 방식 결정
+- 운영 DNS/TLS 적용 여부 결정
 - Nucleus admin/service password를 OpenBao/External-Secrets로 이관
 - readiness/liveness probe 추가
 - PVC 용량을 운영 크기로 확장
@@ -116,6 +115,24 @@ nvcr.io/nvidia/omniverse/nucleus-search:3.2.14
 nvcr.io/nvidia/omniverse/nucleus-thumbnails:1.5.15
 nvcr.io/nvidia/omniverse/nucleus-tagging:3.1.36
 ```
+
+
+### MetalLB 접속 IP
+
+`omniverse-nucleus` Service는 MetalLB `LoadBalancer`로 노출한다.
+
+```text
+LoadBalancer IP: 10.34.48.220
+Service: omniverse/omniverse-nucleus
+```
+
+Nucleus compose stack의 `SERVER_IP_OR_HOST`와 외부 advertised URL도 같은 IP로 맞췄다. 브라우저 접속은 우선 다음 주소를 사용한다.
+
+```text
+http://10.34.48.220:8080/
+```
+
+운영 단계에서 DNS를 붙이면 `SERVER_IP_OR_HOST`와 Service annotation/loadBalancerIP를 DNS/IP 정책에 맞춰 다시 조정한다.
 
 ### Runtime Secret
 

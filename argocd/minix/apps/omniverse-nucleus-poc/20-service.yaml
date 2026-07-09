@@ -7,8 +7,11 @@ metadata:
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/part-of: omniverse
+  annotations:
+    metallb.io/loadBalancerIPs: 10.34.48.220
+    metallb.universe.tf/loadBalancerIPs: 10.34.48.220
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app.kubernetes.io/name: omniverse-nucleus
   ports:
@@ -54,3 +57,4 @@ spec:
   - name: resolver
     port: 8891
     targetPort: 8891
+  loadBalancerIP: 10.34.48.220
