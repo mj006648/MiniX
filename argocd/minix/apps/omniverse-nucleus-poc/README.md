@@ -122,14 +122,14 @@ nvcr.io/nvidia/omniverse/nucleus-tagging:3.1.36
 `omniverse-nucleus` Service는 MetalLB `LoadBalancer`로 노출한다. 현재 MetalLB 정책상 `spec.loadBalancerIP`와 `metallb.io/loadBalancerIPs`를 동시에 쓰면 할당이 실패하므로, Git manifest에는 `metallb.io/loadBalancerIPs` annotation만 사용한다.
 
 ```text
-LoadBalancer IP: 10.34.48.220
+LoadBalancer IP: 10.34.48.221
 Service: omniverse/omniverse-nucleus
 ```
 
 Nucleus compose stack의 `SERVER_IP_OR_HOST`와 외부 advertised URL도 같은 IP로 맞췄다. 브라우저 접속은 우선 다음 주소를 사용한다.
 
 ```text
-http://10.34.48.220:8080/
+http://10.34.48.221:8080/
 ```
 
 운영 단계에서 DNS를 붙이면 `SERVER_IP_OR_HOST`와 Service annotation/loadBalancerIP를 DNS/IP 정책에 맞춰 다시 조정한다.

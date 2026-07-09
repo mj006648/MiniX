@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/part-of: omniverse
   annotations:
-    metallb.io/loadBalancerIPs: 10.34.48.220
+    metallb.io/loadBalancerIPs: 10.34.48.221
 spec:
   type: LoadBalancer
   selector:
