@@ -15,9 +15,9 @@
 ## 현재 클러스터 주의사항
 
 2026-07-09 기준 kube-scheduler-master가 CrashLoopBackOff 상태라 신규 Pod가 일반 scheduler 경로로 배치되지 않는다.
-PoC에서는 RBD PVC 마운트와 StatefulSet 구조 검증을 먼저 하기 위해 임시로 nodeName: com1을 지정했다.
+PoC에서는 RBD PVC 마운트와 StatefulSet 구조 검증을 먼저 하기 위해 임시로 nodeName: com3을 지정했다. 처음에는 com1을 사용했지만 CPU request 여유가 부족해 Pod 생성이 반복 실패했고, com3의 allocatable 여유가 더 커서 변경했다.
 
-- 최종 운영 전에는 nodeName: com1을 제거해야 한다.
+- 최종 운영 전에는 nodeName: com3을 제거해야 한다.
 - kube-scheduler가 정상화되면 일반 scheduler가 node labels/taints/affinity 기준으로 Pod를 배치한다.
 
 ## 다음 단계
@@ -69,13 +69,13 @@ curl http://127.0.0.1:8080/
 
 2. 신규 Pod가 Pending에 머묾
    - 원인: kube-scheduler-master가 CrashLoopBackOff 상태였고, lease 갱신 시 API Server timeout이 발생했다.
-   - 해결: 운영 최종안은 아니지만 PoC 검증을 위해 StatefulSet template에 임시 nodeName: com1을 지정했다.
+   - 해결: 운영 최종안은 아니지만 PoC 검증을 위해 StatefulSet template에 임시 nodeName: com3을 지정했다.
    - 관련 커밋: 032fe33d test: pin Nucleus PoC during scheduler outage
 
 ### 남은 작업
 
 - kube-scheduler / kube-controller-manager CrashLoop 원인 복구
-- scheduler 복구 후 10-statefulset.yaml에서 nodeName: com1 제거
+- scheduler 복구 후 10-statefulset.yaml에서 nodeName: com3 제거
 - 실제 접속 도메인/IP와 TLS/Ingress 노출 방식 확정
 - readiness/liveness probe 추가
 - 실제 운영 전에 Nucleus 데이터 백업/복구 절차 확정
