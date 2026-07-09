@@ -77,6 +77,11 @@ curl http://127.0.0.1:8080/
    - 원인: Kubernetes Service는 기본적으로 Ready Pod만 Endpoint로 넣는다. Nucleus compose stack은 같은 Pod 안의 여러 컨테이너가 bootstrap 중 서로의 Service DNS로 접근해야 해서, `nucleus-api -> nucleus-resolver-cache`가 Pod Ready 이전에 막혔다.
    - 해결: compose 내부 통신용 Service들에 `publishNotReadyAddresses: true`를 추가했다.
 
+
+4. `nucleus-log-processor`가 `nucleus-api:3006`에 연결하지 못하고 CrashLoopBackOff
+   - 원인: Docker Compose에서는 같은 네트워크 안의 컨테이너 포트가 바로 보이지만, Kubernetes Service는 `ports`에 명시된 포트만 프록시한다.
+   - 해결: 외부 LoadBalancer가 아니라 내부 `nucleus-api` ClusterIP Service에만 `service-api` 포트 3006을 추가했다. 이 포트는 관리용 성격이 있으므로 외부 노출 금지.
+
 ### 남은 작업
 
 - kube-scheduler / kube-controller-manager CrashLoop 원인 복구
