@@ -1,0 +1,101 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: omniverse-nucleus
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/part-of: omniverse
+    scalex.io/poc: nucleus-statefulset-rbd
+spec:
+  serviceName: omniverse-nucleus-headless
+  replicas: 1
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: omniverse-nucleus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: omniverse-nucleus
+        app.kubernetes.io/part-of: omniverse
+        scalex.io/poc: nucleus-statefulset-rbd
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: nucleus-placeholder
+          image: python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p /var/lib/omni/nucleus-data/.poc
+              if [ ! -f /var/lib/omni/nucleus-data/.poc/created-at.txt ]; then
+                date -Is > /var/lib/omni/nucleus-data/.poc/created-at.txt
+              fi
+              echo "started-at=$(date -Is)" >> /var/lib/omni/nucleus-data/.poc/starts.log
+              cat > /var/lib/omni/nucleus-data/index.html <<HTML
+              <html><body>
+              <h1>Omniverse Nucleus StatefulSet PoC</h1>
+              <p>This is a placeholder container. Replace image/env/command with NVIDIA Nucleus after NGC artifact is available.</p>
+              <pre>$(cat /var/lib/omni/nucleus-data/.poc/created-at.txt)</pre>
+              </body></html>
+              HTML
+              python -m http.server 8080 --directory /var/lib/omni/nucleus-data
+          ports:
+            - name: web
+              containerPort: 8080
+            - name: api-3009
+              containerPort: 3009
+            - name: api-3019
+              containerPort: 3019
+            - name: lft
+              containerPort: 3030
+            - name: auth-3100
+              containerPort: 3100
+            - name: auth-3180
+              containerPort: 3180
+            - name: discovery
+              containerPort: 3333
+            - name: search
+              containerPort: 3400
+          volumeMounts:
+            - name: nucleus-data
+              mountPath: /var/lib/omni/nucleus-data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: web
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: web
+            initialDelaySeconds: 20
+            periodSeconds: 20
+  volumeClaimTemplates:
+    - metadata:
+        name: nucleus-data
+        labels:
+          app.kubernetes.io/name: omniverse-nucleus
+          scalex.io/poc: nucleus-statefulset-rbd
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: rook-ceph-block
+        resources:
+          requests:
+            storage: 10Gi

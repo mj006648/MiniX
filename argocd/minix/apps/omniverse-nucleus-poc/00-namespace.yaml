@@ -1,0 +1,10 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: omniverse
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    kubernetes.io/metadata.name: omniverse
+    app.kubernetes.io/part-of: omniverse

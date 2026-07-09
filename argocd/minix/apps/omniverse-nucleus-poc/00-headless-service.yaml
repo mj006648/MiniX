@@ -1,0 +1,18 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: omniverse-nucleus-headless
+  namespace: omniverse
+  labels:
+    app.kubernetes.io/name: omniverse-nucleus
+    app.kubernetes.io/component: headless
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: omniverse-nucleus
+  ports:
+    - name: web
+      port: 8080
+      targetPort: web

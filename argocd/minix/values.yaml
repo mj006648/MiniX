@@ -331,6 +331,15 @@ applications:
       syncOptions:
         - CreateNamespace=true
 
+
+    # Wave 31: Omniverse Nucleus StatefulSet/RBD PoC
+    omniverse-nucleus-poc:
+      enabled: true
+      namespace: omniverse
+      syncWave: "31"
+      source:
+        path: "argocd/minix/apps/omniverse-nucleus-poc"
+
     kafka-ui:
       enabled: true
       namespace: confluent
