@@ -119,7 +119,7 @@ nvcr.io/nvidia/omniverse/nucleus-tagging:3.1.36
 
 ### MetalLB 접속 IP
 
-`omniverse-nucleus` Service는 MetalLB `LoadBalancer`로 노출한다.
+`omniverse-nucleus` Service는 MetalLB `LoadBalancer`로 노출한다. 현재 MetalLB 정책상 `spec.loadBalancerIP`와 `metallb.io/loadBalancerIPs`를 동시에 쓰면 할당이 실패하므로, Git manifest에는 `metallb.io/loadBalancerIPs` annotation만 사용한다.
 
 ```text
 LoadBalancer IP: 10.34.48.220
