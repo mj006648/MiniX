@@ -72,6 +72,11 @@ curl http://127.0.0.1:8080/
    - 해결: 운영 최종안은 아니지만 PoC 검증을 위해 StatefulSet template에 임시 nodeName: com3을 지정했다.
    - 관련 커밋: 032fe33d test: pin Nucleus PoC during scheduler outage
 
+
+3. `nucleus-api`가 `nucleus-resolver-cache`에 연결하지 못하고 CrashLoopBackOff
+   - 원인: Kubernetes Service는 기본적으로 Ready Pod만 Endpoint로 넣는다. Nucleus compose stack은 같은 Pod 안의 여러 컨테이너가 bootstrap 중 서로의 Service DNS로 접근해야 해서, `nucleus-api -> nucleus-resolver-cache`가 Pod Ready 이전에 막혔다.
+   - 해결: compose 내부 통신용 Service들에 `publishNotReadyAddresses: true`를 추가했다.
+
 ### 남은 작업
 
 - kube-scheduler / kube-controller-manager CrashLoop 원인 복구

@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-api
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -34,6 +35,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-lft
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -51,6 +53,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-lft-lb
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -68,6 +71,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-log-processor
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -85,6 +89,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-resolver-cache
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -102,6 +107,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: utl-monpx
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -119,6 +125,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-discovery
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -136,6 +143,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-auth
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -159,6 +167,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-navigator
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -176,6 +185,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-search
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
@@ -193,6 +203,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-tagging
 spec:
+  publishNotReadyAddresses: true
   type: ClusterIP
   selector:
     app.kubernetes.io/name: omniverse-nucleus
