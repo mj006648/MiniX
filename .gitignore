@@ -1,0 +1,5 @@
+
+# Local Python virtualenv/cache artifacts
+trident-ui/streamlit/
+trident-ui/__pycache__/
+*.pyc
