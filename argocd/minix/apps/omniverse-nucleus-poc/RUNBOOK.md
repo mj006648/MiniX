@@ -143,6 +143,7 @@ Rook-Ceph RBD image
 argocd/minix/apps/omniverse-nucleus-poc/
 ├── README.md
 ├── RUNBOOK.md
+├── 00-storageclass.yaml
 ├── 00-namespace.yaml
 ├── 10-headless-service.yaml
 ├── 20-statefulset.yaml
@@ -240,7 +241,7 @@ nodeName=com3    # 임시 우회값
 | 항목 | 현재 값 | 다음 작업 |
 | --- | --- | --- |
 | `SERVER_IP_OR_HOST` | `10.34.48.221` | MetalLB IP 또는 DNS에 맞게 변경 |
-| `storageClassName` | `rook-ceph-block` | 실제 클러스터 StorageClass에 맞게 변경 |
+| `storageClassName` | `rook-ceph-block` | 현재 live PVC와 맞추기 위해 유지. 신규 운영 설치/마이그레이션 시 `rook-ceph-block-nucleus-retain` 검토 |
 | PVC size | `10Gi` | 운영 용량으로 증설 |
 | `nodeName` | `com3` | scheduler 복구 후 제거 |
 | image tag | NVIDIA Compose Stack `2023.2.10` 기준 | 새 버전 사용 시 Compose artifact와 함께 재검증 |
@@ -337,7 +338,7 @@ metadata:
 
 | Wave | Manifest | 이유 |
 | --- | --- | --- |
-| `0` | `00-namespace.yaml` | namespace가 먼저 있어야 namespaced resource를 만들 수 있음 |
+| `0` | `00-storageclass.yaml`, `00-namespace.yaml` | namespace가 먼저 있어야 namespaced resource를 만들 수 있음 |
 | `1` | `10-headless-service.yaml`, `10-internal-services.yaml`, `10-loadbalancer-service.yaml` | Nucleus Pod가 뜨기 전에 내부 DNS/Service 이름을 먼저 준비 |
 | `2` | `20-statefulset.yaml` | Secret/PVC/Service 전제가 준비된 뒤 실제 Nucleus Pod 실행 |
 
@@ -675,6 +676,34 @@ PV reclaimPolicy: Delete
 결론부터 말하면, `StorageClass reclaimPolicy: Retain`만으로는 충분하지 않다. 이것은 PVC 삭제 시 RBD image를 지우지 않게 하는 Kubernetes lifecycle 보호장치이지, Ceph cluster 자체가 망가지는 상황을 해결하지 않는다.
 
 데이터 보호는 아래 4계층으로 나눠야 한다.
+
+
+### Nucleus 전용 StorageClass
+
+신규 운영 설치 또는 PVC 재생성 마이그레이션부터는 기본 `rook-ceph-block` 대신 Nucleus 전용 StorageClass를 사용하는 것이 좋다.
+
+```text
+StorageClass: rook-ceph-block-nucleus-retain
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+provisioner: rook-ceph.rbd.csi.ceph.com
+pool: replicapool
+```
+
+이 StorageClass는 PVC 삭제 실수 시 RBD image가 즉시 삭제되는 것을 막기 위한 것이다.
+
+현재 PoC manifest의 StatefulSet은 live PVC와의 호환을 위해 `storageClassName: rook-ceph-block`을 유지한다. Kubernetes StatefulSet의 `volumeClaimTemplates`는 생성 후 변경이 까다롭기 때문에, 이미 떠 있는 Nucleus에서 이 값을 Git으로 바로 바꾸면 ArgoCD sync 실패 또는 재생성 절차가 필요할 수 있다.
+
+운영 신규 설치라면 첫 Sync 전에 `20-statefulset.yaml`의 `storageClassName`을 아래처럼 바꾸는 방향이 좋다.
+
+```yaml
+volumeClaimTemplates:
+- spec:
+    storageClassName: rook-ceph-block-nucleus-retain
+```
+
+기존 PVC를 전용 StorageClass로 옮기려면 단순 patch가 아니라 snapshot/restore 또는 새 PVC 마이그레이션 절차로 진행한다.
+ 단, 이미 생성된 PVC `nucleus-data-omniverse-nucleus-0`는 생성 당시 `rook-ceph-block`을 사용했으므로 StorageClass 이름이 자동으로 바뀌지는 않는다. 현재 live PV는 별도로 `Retain`으로 patch 완료했다.
 
 ### 1단계: Pod/StatefulSet lifecycle 보호
 

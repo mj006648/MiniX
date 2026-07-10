@@ -197,7 +197,7 @@ kubectl -n omniverse port-forward svc/omniverse-nucleus 8080:8080
 
 ## 2026-07-10 데이터 보호 정책 보강
 
-현재 Nucleus PVC의 PV reclaimPolicy를 `Delete`에서 `Retain`으로 패치했다.
+현재 Nucleus PVC의 PV reclaimPolicy를 `Delete`에서 `Retain`으로 패치했고, Nucleus 전용 StorageClass `rook-ceph-block-nucleus-retain`도 추가했다. 단, 현재 live StatefulSet/PVC는 이미 `rook-ceph-block`으로 생성되어 있어 그대로 유지한다.
 
 ```bash
 PV=$(kubectl -n omniverse get pvc nucleus-data-omniverse-nucleus-0 -o jsonpath='{.spec.volumeName}')
@@ -232,6 +232,7 @@ status=OK
 ArgoCD Application: omniverse-nucleus-poc / Synced / Healthy
 Pod: omniverse-nucleus-0 / 12/12 Running
 PVC: nucleus-data-omniverse-nucleus-0 / Bound / rook-ceph-block / 10Gi
+Dedicated SC prepared: rook-ceph-block-nucleus-retain / reclaimPolicy Retain
 LoadBalancer: 10.34.48.221
 ```
 
@@ -321,8 +322,35 @@ metadata:
 
 | Wave | Manifest | 이유 |
 | --- | --- | --- |
-| `0` | `00-namespace.yaml` | namespace가 먼저 있어야 namespaced resource를 만들 수 있음 |
+| `0` | `00-storageclass.yaml`, `00-namespace.yaml` | namespace가 먼저 있어야 namespaced resource를 만들 수 있음 |
 | `1` | `10-headless-service.yaml`, `10-internal-services.yaml`, `10-loadbalancer-service.yaml` | Nucleus Pod가 뜨기 전에 내부 DNS/Service 이름을 먼저 준비 |
 | `2` | `20-statefulset.yaml` | Secret/PVC/Service 전제가 준비된 뒤 실제 Nucleus Pod 실행 |
 
 따라서 파일명 prefix는 문서 가독성용이고, 운영 기준은 `argocd.argoproj.io/sync-wave`이다.
+
+### Nucleus 전용 StorageClass
+
+신규 운영 설치 또는 PVC 재생성 마이그레이션부터는 기본 `rook-ceph-block` 대신 Nucleus 전용 StorageClass를 사용하는 것이 좋다.
+
+```text
+StorageClass: rook-ceph-block-nucleus-retain
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+provisioner: rook-ceph.rbd.csi.ceph.com
+pool: replicapool
+```
+
+이 StorageClass는 PVC 삭제 실수 시 RBD image가 즉시 삭제되는 것을 막기 위한 것이다.
+
+현재 PoC manifest의 StatefulSet은 live PVC와의 호환을 위해 `storageClassName: rook-ceph-block`을 유지한다. Kubernetes StatefulSet의 `volumeClaimTemplates`는 생성 후 변경이 까다롭기 때문에, 이미 떠 있는 Nucleus에서 이 값을 Git으로 바로 바꾸면 ArgoCD sync 실패 또는 재생성 절차가 필요할 수 있다.
+
+운영 신규 설치라면 첫 Sync 전에 `20-statefulset.yaml`의 `storageClassName`을 아래처럼 바꾸는 방향이 좋다.
+
+```yaml
+volumeClaimTemplates:
+- spec:
+    storageClassName: rook-ceph-block-nucleus-retain
+```
+
+기존 PVC를 전용 StorageClass로 옮기려면 단순 patch가 아니라 snapshot/restore 또는 새 PVC 마이그레이션 절차로 진행한다.
+ 단, 이미 생성된 PVC `nucleus-data-omniverse-nucleus-0`는 생성 당시 `rook-ceph-block`을 사용했으므로 StorageClass 이름이 자동으로 바뀌지는 않는다. 현재 live PV는 별도로 `Retain`으로 patch 완료했다.
