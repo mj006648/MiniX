@@ -1,5 +1,8 @@
 # Omniverse Nucleus StatefulSet PoC
 
+> 자세한 재현 절차와 설계 판단은 [`RUNBOOK.md`](./RUNBOOK.md)를 먼저 읽는다.
+> `README.md`는 현재 상태/검증 결과 요약이고, `RUNBOOK.md`는 왜 이렇게 했는지와 NVIDIA Compose Stack을 Kubernetes로 옮긴 과정을 정리한 실행 런북이다.
+
 이 앱은 실제 NVIDIA Omniverse Nucleus 이미지를 배포하기 전, ArgoCD가 `StatefulSet + Rook-Ceph RBD PVC + Service` 구조를 정상적으로 만들 수 있는지 검증하기 위한 PoC이다.
 
 ## 현재 범위
