@@ -11,7 +11,7 @@
 - Compose stack의 12개 서비스를 Kubernetes StatefulSet의 12개 컨테이너로 변환
 - `rook-ceph-block` RBD StorageClass 사용
 - `volumeClaimTemplates`로 Pod 전용 PVC 생성
-- Nucleus DATA_ROOT `/var/lib/omni/nucleus-data`를 RBD PVC로 마운트
+- Nucleus 실제 데이터/로그 경로(`/omni/data`, `/omni/log`, 일부 `/omni/temp`, `/omni/scratch-meta-dump`)를 RBD PVC로 마운트
 - `nvcr.io/nvidia/omniverse/*` 실제 Nucleus 이미지 사용
 
 
@@ -56,7 +56,7 @@ curl http://127.0.0.1:8080/
 - StatefulSet omniverse-nucleus: 1/1 Ready
 - PVC nucleus-data-omniverse-nucleus-0: rook-ceph-block, 10Gi, Bound
 - Pod omniverse-nucleus-0: com1 노드에서 Running
-- PVC 마운트 경로 /var/lib/omni/nucleus-data에 marker 파일 생성 확인
+- 초기 smoke 단계에서는 PVC marker 파일 생성을 확인했고, 실제 Nucleus 전환 후에는 `/omni/data`, `/omni/log` 등이 `/dev/rbd1`로 마운트됨을 확인
 - Pod 내부에서 localhost와 Service DNS 양쪽 HTTP 응답 확인
 
 검증 출력 요약:
@@ -193,6 +193,47 @@ kubectl -n omniverse port-forward svc/omniverse-nucleus 8080:8080
 ```
 
 
+
+## 2026-07-10 로그인 및 RBD persistence 확인
+
+Isaac Sim/Nucleus 클라이언트에서 `10.34.48.221`로 접속 후 `omniverse` 계정 로그인이 성공했다. `nucleus-auth` 로그에서 다음 이벤트를 확인했다.
+
+```text
+InternalCredentials.auth: username=omniverse
+status=OK
+```
+
+현재 live 상태:
+
+```text
+ArgoCD Application: omniverse-nucleus-poc / Synced / Healthy
+Pod: omniverse-nucleus-0 / 12/12 Running
+PVC: nucleus-data-omniverse-nucleus-0 / Bound / rook-ceph-block / 10Gi
+LoadBalancer: 10.34.48.221
+```
+
+RBD 마운트 확인 결과, 실제 persistent 데이터는 `/dev/rbd1`로 붙은 다음 경로에 저장된다.
+
+```text
+/omni/data
+/omni/log
+/omni/temp
+/omni/scratch-meta-dump
+/var/lib/omni/nucleus-data/empty
+```
+
+실제 Nucleus 데이터베이스/메타데이터 파일도 RBD 위의 `/omni/data`에서 확인했다.
+
+```text
+/omni/data/usergroups.1.0
+/omni/data/meta.1.1
+/omni/data/content.1.1
+/omni/data/omniobjects.1.0
+/omni/data/__version_tag
+```
+
+따라서 `omniverse-nucleus-0` Pod가 삭제되어도 StatefulSet이 같은 PVC `nucleus-data-omniverse-nucleus-0`를 다시 붙이면 데이터는 유지된다. 단, PVC 자체를 삭제하면 PV reclaimPolicy가 `Delete`이므로 underlying RBD image도 삭제되어 데이터가 사라질 수 있다.
+
 ## 2026-07-09 최종 검증 결과: 실제 Nucleus + RBD + MetalLB
 
 검증 당시 manifest Git revision: `4ba532c4` (`fix: route Nucleus web port to Navigator`)
@@ -227,7 +268,7 @@ Server: nginx/1.28.1
 
 - NVIDIA NGC Enterprise Nucleus Compose Stack `2023.2.10` artifact 기반 실제 이미지 사용
 - Compose의 12개 서비스를 Kubernetes StatefulSet의 12개 컨테이너로 구동
-- Rook-Ceph RBD PVC를 Nucleus DATA_ROOT로 마운트
+- Rook-Ceph RBD PVC를 Nucleus 실제 데이터/로그 경로로 마운트
 - MetalLB LoadBalancer IP `10.34.48.221`로 외부 접속 노출
 - 내부 Compose DNS 대체용 ClusterIP Service 구성
 - Kubernetes와 Compose 차이로 발생한 bootstrap 문제 해결
