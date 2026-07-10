@@ -4,6 +4,8 @@ kind: Service
 metadata:
   name: omniverse-nucleus-headless
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: headless

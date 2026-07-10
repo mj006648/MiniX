@@ -4,6 +4,8 @@ kind: StatefulSet
 metadata:
   name: omniverse-nucleus
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels: &id001
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/part-of: omniverse

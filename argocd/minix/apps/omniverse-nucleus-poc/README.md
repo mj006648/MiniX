@@ -93,7 +93,7 @@ curl http://127.0.0.1:8080/
 ### 남은 작업
 
 - kube-scheduler / kube-controller-manager CrashLoop 원인 복구
-- scheduler 복구 후 10-statefulset.yaml에서 nodeName: com3 제거
+- scheduler 복구 후 20-statefulset.yaml에서 nodeName: com3 제거
 - 실제 접속 도메인/IP와 TLS/Ingress 노출 방식 확정
 - readiness/liveness probe 추가
 - 실제 운영 전에 Nucleus 데이터 백업/복구 절차 확정
@@ -283,3 +283,23 @@ Server: nginx/1.28.1
 - `nvcr-io`, `nucleus-secrets`, `nucleus-passwords`는 Git에 넣지 않고 런타임 Secret으로 생성했다. 운영 전에는 OpenBao + External-Secrets로 이관해야 한다.
 - NGC API Key 또는 Docker registry credential은 개인 키를 그대로 재사용하지 말고, 테스트 후 revoke/rotate하고 조직 정책에 맞게 Secret Store에 넣어야 한다.
 
+
+### Sync wave 기준
+
+파일명 앞의 `00`, `10`, `20`은 사람이 읽기 쉽게 정렬하기 위한 prefix이다. ArgoCD의 실제 적용 순서는 파일명이 아니라 각 manifest의 annotation으로 명시한다.
+
+```yaml
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "<wave>"
+```
+
+현재 기준:
+
+| Wave | Manifest | 이유 |
+| --- | --- | --- |
+| `0` | `00-namespace.yaml` | namespace가 먼저 있어야 namespaced resource를 만들 수 있음 |
+| `1` | `10-headless-service.yaml`, `10-internal-services.yaml`, `10-loadbalancer-service.yaml` | Nucleus Pod가 뜨기 전에 내부 DNS/Service 이름을 먼저 준비 |
+| `2` | `20-statefulset.yaml` | Secret/PVC/Service 전제가 준비된 뒤 실제 Nucleus Pod 실행 |
+
+따라서 파일명 prefix는 문서 가독성용이고, 운영 기준은 `argocd.argoproj.io/sync-wave`이다.

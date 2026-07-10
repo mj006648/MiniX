@@ -4,6 +4,7 @@ kind: Namespace
 metadata:
   name: omniverse
   annotations:
+    argocd.argoproj.io/sync-wave: "0"
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
   labels:
     kubernetes.io/metadata.name: omniverse

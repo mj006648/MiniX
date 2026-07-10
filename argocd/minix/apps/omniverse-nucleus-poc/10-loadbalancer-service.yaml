@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/part-of: omniverse
   annotations:
+    argocd.argoproj.io/sync-wave: "1"
     metallb.io/loadBalancerIPs: 10.34.48.221
 spec:
   type: LoadBalancer

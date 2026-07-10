@@ -144,10 +144,10 @@ argocd/minix/apps/omniverse-nucleus-poc/
 ├── README.md
 ├── RUNBOOK.md
 ├── 00-namespace.yaml
-├── 00-headless-service.yaml
-├── 10-statefulset.yaml
-├── 15-internal-services.yaml
-└── 20-service.yaml
+├── 10-headless-service.yaml
+├── 20-statefulset.yaml
+├── 10-internal-services.yaml
+└── 10-loadbalancer-service.yaml
 ```
 
 | 파일 | 역할 |
@@ -155,10 +155,10 @@ argocd/minix/apps/omniverse-nucleus-poc/
 | `README.md` | 현재 상태, 검증 결과, 문제 해결 요약 |
 | `RUNBOOK.md` | 왜 이렇게 했는지, 재현 절차, NVIDIA 공식 방식과 차이 |
 | `00-namespace.yaml` | `omniverse` namespace 생성 |
-| `00-headless-service.yaml` | StatefulSet용 headless service |
-| `10-statefulset.yaml` | 실제 Nucleus 12개 container + RBD PVC 정의 |
-| `15-internal-services.yaml` | Compose service DNS를 Kubernetes Service로 대체 |
-| `20-service.yaml` | MetalLB LoadBalancer 외부 노출 |
+| `10-headless-service.yaml` | StatefulSet용 headless service |
+| `20-statefulset.yaml` | 실제 Nucleus 12개 container + RBD PVC 정의 |
+| `10-internal-services.yaml` | Compose service DNS를 Kubernetes Service로 대체 |
+| `10-loadbalancer-service.yaml` | MetalLB LoadBalancer 외부 노출 |
 
 ## 7.1 Manifest 상세와 다음에 수정할 값
 
@@ -183,7 +183,7 @@ metadata.name: omniverse
 - namespace 이름을 바꾸려면 모든 manifest의 `metadata.namespace`도 같이 바꿔야 한다.
 - 현재는 `omniverse` 유지가 권장된다.
 
-### `00-headless-service.yaml`
+### `10-headless-service.yaml`
 
 생성 리소스:
 
@@ -203,7 +203,7 @@ spec.clusterIP: None
 - 보통 변경하지 않는다.
 - StatefulSet 이름을 바꾸면 selector label만 같이 맞춘다.
 
-### `10-statefulset.yaml`
+### `20-statefulset.yaml`
 
 생성 리소스:
 
@@ -251,7 +251,7 @@ nodeName=com3    # 임시 우회값
 - `nodeName: com3`는 운영 설정이 아니라 현재 클러스터 scheduler 문제를 우회하기 위한 임시값이다.
 - 운영 전에는 `nodeName`을 제거하고 `nodeSelector`, `affinity`, `tolerations`, `resources` 기반으로 배치해야 한다.
 
-### `15-internal-services.yaml`
+### `10-internal-services.yaml`
 
 생성 리소스:
 
@@ -283,7 +283,7 @@ metadata.name: utl-monpx
 - container port나 service name을 바꾸면 StatefulSet env와 같이 맞춰야 한다.
 - `nucleus-api`의 `3006` 포트는 내부용으로만 유지하고 외부 LoadBalancer에는 열지 않는다.
 
-### `20-service.yaml`
+### `10-loadbalancer-service.yaml`
 
 생성 리소스:
 
@@ -321,6 +321,27 @@ targetPort=80
 
 - `10.34.48.220`은 ArgoCD에서 이미 사용 중이어서 Nucleus는 `10.34.48.221`을 사용했다.
 - MetalLB에서는 `spec.loadBalancerIP`와 `metallb.io/loadBalancerIPs`를 동시에 쓰지 않는다. 현재 manifest는 annotation만 사용한다.
+
+
+### Sync wave 기준
+
+파일명 앞의 `00`, `10`, `20`은 사람이 읽기 쉽게 정렬하기 위한 prefix이다. ArgoCD의 실제 적용 순서는 파일명이 아니라 각 manifest의 annotation으로 명시한다.
+
+```yaml
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "<wave>"
+```
+
+현재 기준:
+
+| Wave | Manifest | 이유 |
+| --- | --- | --- |
+| `0` | `00-namespace.yaml` | namespace가 먼저 있어야 namespaced resource를 만들 수 있음 |
+| `1` | `10-headless-service.yaml`, `10-internal-services.yaml`, `10-loadbalancer-service.yaml` | Nucleus Pod가 뜨기 전에 내부 DNS/Service 이름을 먼저 준비 |
+| `2` | `20-statefulset.yaml` | Secret/PVC/Service 전제가 준비된 뒤 실제 Nucleus Pod 실행 |
+
+따라서 파일명 prefix는 문서 가독성용이고, 운영 기준은 `argocd.argoproj.io/sync-wave`이다.
 
 ### Git에 올리지 않는 것
 
@@ -425,7 +446,7 @@ THUMBNAILING_VERSION=1.5.15
 TAGGING_VERSION=3.1.36
 ```
 
-Kubernetes manifest에서는 이 값들을 `10-statefulset.yaml`의 container env와 image tag로 옮겼다.
+Kubernetes manifest에서는 이 값들을 `20-statefulset.yaml`의 container env와 image tag로 옮겼다.
 
 ### 8.4 Secret 생성
 
@@ -482,7 +503,7 @@ nucleus-log-processor -> nucleus-api:3006
 nucleus-api -> nucleus-resolver-cache
 ```
 
-Kubernetes에서는 이 이름들을 ClusterIP Service로 만들어줘야 한다. 그래서 `15-internal-services.yaml`을 추가했다.
+Kubernetes에서는 이 이름들을 ClusterIP Service로 만들어줘야 한다. 그래서 `10-internal-services.yaml`을 추가했다.
 
 ### 9.2 Ready 전 Endpoint 문제
 
@@ -653,7 +674,7 @@ PV reclaimPolicy: Delete
 ### 필수
 
 - kube-scheduler / kube-controller-manager 불안정 원인 해결
-- `10-statefulset.yaml`의 임시 `nodeName: com3` 제거
+- `20-statefulset.yaml`의 임시 `nodeName: com3` 제거
 - Secret 직접 생성 방식 제거
 - OpenBao + External-Secrets로 `nvcr-io`, `nucleus-secrets`, `nucleus-passwords` 관리
 - 운영 DNS/TLS 결정

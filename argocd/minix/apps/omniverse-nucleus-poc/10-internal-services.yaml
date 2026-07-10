@@ -4,6 +4,8 @@ kind: Service
 metadata:
   name: nucleus-api
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-api
@@ -34,6 +36,8 @@ kind: Service
 metadata:
   name: nucleus-lft
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-lft
@@ -52,6 +56,8 @@ kind: Service
 metadata:
   name: nucleus-lft-lb
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-lft-lb
@@ -70,6 +76,8 @@ kind: Service
 metadata:
   name: nucleus-log-processor
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-log-processor
@@ -88,6 +96,8 @@ kind: Service
 metadata:
   name: nucleus-resolver-cache
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-resolver-cache
@@ -106,6 +116,8 @@ kind: Service
 metadata:
   name: utl-monpx
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: utl-monpx
@@ -124,6 +136,8 @@ kind: Service
 metadata:
   name: nucleus-discovery
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-discovery
@@ -142,6 +156,8 @@ kind: Service
 metadata:
   name: nucleus-auth
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-auth
@@ -166,6 +182,8 @@ kind: Service
 metadata:
   name: nucleus-navigator
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-navigator
@@ -184,6 +202,8 @@ kind: Service
 metadata:
   name: nucleus-search
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-search
@@ -202,6 +222,8 @@ kind: Service
 metadata:
   name: nucleus-tagging
   namespace: omniverse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: omniverse-nucleus
     app.kubernetes.io/component: nucleus-tagging
