@@ -669,6 +669,197 @@ PV reclaimPolicy: Delete
 - PV reclaimPolicy `Retain` 검토
 - Rook/Ceph snapshot 또는 Velero 백업 정책 수립
 
+
+## 11.2 Ceph/RBD 장애까지 고려한 데이터 보호 계층
+
+결론부터 말하면, `StorageClass reclaimPolicy: Retain`만으로는 충분하지 않다. 이것은 PVC 삭제 시 RBD image를 지우지 않게 하는 Kubernetes lifecycle 보호장치이지, Ceph cluster 자체가 망가지는 상황을 해결하지 않는다.
+
+데이터 보호는 아래 4계층으로 나눠야 한다.
+
+### 1단계: Pod/StatefulSet lifecycle 보호
+
+현재 StatefulSet에는 다음 설정을 둔다.
+
+```yaml
+persistentVolumeClaimRetentionPolicy:
+  whenDeleted: Retain
+  whenScaled: Retain
+```
+
+의미:
+
+- StatefulSet을 지우거나 scale down해도 PVC를 자동 삭제하지 않는다.
+- Pod가 재시작되거나 재생성되어도 같은 PVC를 다시 붙인다.
+
+### 2단계: PVC/PV 삭제 보호
+
+Kubernetes StorageClass 공식 동작 기준으로, 동적 생성 PV는 StorageClass의 `reclaimPolicy`를 따른다. 지정하지 않으면 기본값은 `Delete`이다. 따라서 운영용 Nucleus는 전용 StorageClass를 `Retain`으로 만드는 것이 좋다.
+
+예시:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-ceph-block-retain
+provisioner: rook-ceph.rbd.csi.ceph.com
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+parameters:
+  clusterID: rook-ceph
+  pool: replicapool
+  imageFormat: "2"
+  imageFeatures: layering
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+  csi.storage.k8s.io/controller-publish-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/controller-publish-secret-namespace: rook-ceph
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+  csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+```
+
+주의:
+
+- 이미 만들어진 PV는 StorageClass를 수정해도 자동으로 바뀌지 않는다.
+- 현재 live Nucleus PV는 아래 명령으로 `Retain`으로 패치했다.
+
+```bash
+PV=$(kubectl -n omniverse get pvc nucleus-data-omniverse-nucleus-0 -o jsonpath='{.spec.volumeName}')
+kubectl patch pv "$PV" -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+kubectl get pv "$PV" -o jsonpath='{.metadata.name} {.spec.persistentVolumeReclaimPolicy}{"\n"}'
+```
+
+### 3단계: Ceph 내부 장애 보호
+
+Rook 예시의 RBD pool은 보통 다음처럼 구성한다.
+
+```yaml
+spec:
+  failureDomain: host
+  replicated:
+    size: 3
+```
+
+의미:
+
+- 서로 다른 host의 OSD 3개에 복제본을 둔다.
+- 단일 디스크/OSD/노드 장애는 Ceph가 복제본으로 버틸 수 있다.
+- 그러나 Ceph pool 자체가 손상되거나 여러 host가 동시에 손상되면 이 계층만으로는 부족하다.
+
+### 4단계: Snapshot / off-cluster backup / DR
+
+Ceph cluster 자체 장애까지 대비하려면 RBD snapshot 또는 외부 백업이 필요하다. Rook/Ceph CSI는 VolumeSnapshotClass와 VolumeSnapshot으로 RBD snapshot을 만들고, snapshot에서 새 PVC로 복구하는 방식을 제공한다.
+
+예시 흐름:
+
+```text
+VolumeSnapshotClass 생성
+  -> VolumeSnapshot 생성(source PVC: nucleus-data-omniverse-nucleus-0)
+  -> READYTOUSE 확인
+  -> 장애 시 snapshot을 dataSource로 하는 새 PVC 생성
+```
+
+사이트/클러스터 전체 장애까지 고려하면 RBD mirroring 또는 Velero/Kopia/Restic 같은 외부 백업도 필요하다. Rook RBD mirroring은 여러 Ceph cluster 사이에서 RBD image를 비동기 복제하는 DR 방식이다.
+
+운영 권장안:
+
+| 계층 | 권장 설정 | 목적 |
+| --- | --- | --- |
+| StatefulSet | `persistentVolumeClaimRetentionPolicy: Retain` | StatefulSet 삭제/scale down 시 PVC 보존 |
+| PV | `persistentVolumeReclaimPolicy: Retain` | PVC 삭제 실수 시 RBD 즉시 삭제 방지 |
+| StorageClass | Nucleus 전용 `rook-ceph-block-retain` | 새 PV가 처음부터 Retain으로 생성되게 함 |
+| Ceph pool | `replicated.size: 3`, `failureDomain: host` | 단일 노드/OSD 장애 대응 |
+| Snapshot | RBD VolumeSnapshot 정기 생성 | 논리 삭제/업데이트 사고 복구 |
+| Off-cluster backup | Velero/Kopia/Restic/Object storage/NAS 등 | Ceph cluster 자체 장애 대응 |
+| DR | RBD mirroring | 다른 Ceph cluster로 재해복구 |
+
+참고 공식 문서:
+
+- Kubernetes StorageClass reclaimPolicy: https://kubernetes.io/docs/concepts/storage/storage-classes/#reclaim-policy
+- Rook Ceph RBD block storage: https://rook.io/docs/rook/latest-release/Storage-Configuration/Block-Storage-RBD/block-storage/
+- Rook Ceph CSI snapshots: https://rook.io/docs/rook/latest-release/Storage-Configuration/Ceph-CSI/ceph-csi-snapshot/
+- Rook RBD mirroring/DR: https://rook.io/docs/rook/latest-release/Storage-Configuration/Block-Storage-RBD/rbd-mirroring/
+
+## 11.3 Nucleus 계정/비밀번호 변경 절차
+
+현재 기본 관리자 계정은 `omniverse`이고, 비밀번호는 `nucleus-passwords` Secret의 `master-password`에서 온다. 서비스 계정들은 `service-password`를 사용한다. 실제 비밀번호는 Git에 넣지 않는다.
+
+현재 구조:
+
+```text
+Secret nucleus-passwords
+├── master-password      -> omniverse 관리자 계정 비밀번호
+└── service-password     -> tags/search/thumbnails 등 내부 서비스 계정 비밀번호
+
+20-statefulset.yaml
+└── nucleus-auth container
+    ├── NUCLEUS_MASTER_PASSWORD <- secretKeyRef master-password
+    ├── NUCLEUS_SERVICE_PASSWORD <- secretKeyRef service-password
+    └── CREDENTIAL_USERS         <- 로그인 가능한 사용자 목록
+```
+
+### 관리자 비밀번호 변경
+
+```bash
+kubectl -n omniverse patch secret nucleus-passwords \
+  --type merge \
+  -p '{"stringData":{"master-password":"<NEW_ADMIN_PASSWORD>"}}'
+
+kubectl -n omniverse rollout restart statefulset/omniverse-nucleus
+```
+
+주의:
+
+- 실제 값은 `<NEW_ADMIN_PASSWORD>` 자리에 입력한다.
+- Git/README/RUNBOOK/YAML에는 실제 비밀번호를 쓰지 않는다.
+- 운영에서는 OpenBao + External-Secrets로 `nucleus-passwords`를 생성하게 바꾼다.
+
+### `netai` 같은 사용자 추가
+
+예: `netai` 사용자를 추가하고 싶다면 비밀번호는 Secret에만 넣고, manifest에는 secretKeyRef와 사용자명만 넣는다.
+
+1. Secret에 새 password key 추가:
+
+```bash
+kubectl -n omniverse patch secret nucleus-passwords \
+  --type merge \
+  -p '{"stringData":{"netai-password":"<NETAI_PASSWORD>"}}'
+```
+
+2. `20-statefulset.yaml`의 `nucleus-auth` container env에 추가:
+
+```yaml
+- name: NUCLEUS_NETAI_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: nucleus-passwords
+      key: netai-password
+```
+
+3. 같은 container의 `CREDENTIAL_USERS` JSON에 사용자 추가:
+
+```json
+{
+  "username": "netai",
+  "password": "$(NUCLEUS_NETAI_PASSWORD)",
+  "profile": { "admin": true }
+}
+```
+
+4. ArgoCD sync 또는 StatefulSet 재시작:
+
+```bash
+kubectl -n omniverse rollout restart statefulset/omniverse-nucleus
+```
+
+주의:
+
+- `netai/<NETAI_PASSWORD>`처럼 실제 비밀번호를 Git에 직접 쓰지 않는다.
+- 문서와 manifest에는 `<NETAI_PASSWORD>` 또는 secretKeyRef만 둔다.
+- 여러 사용자를 운영할 거면 Nucleus 내장 사용자보다 OIDC/Keycloak 연동을 검토하는 것이 좋다.
+
 ## 12. 운영화 전에 해야 할 일
 
 ### 필수

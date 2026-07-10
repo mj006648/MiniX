@@ -194,6 +194,29 @@ kubectl -n omniverse port-forward svc/omniverse-nucleus 8080:8080
 
 
 
+
+## 2026-07-10 데이터 보호 정책 보강
+
+현재 Nucleus PVC의 PV reclaimPolicy를 `Delete`에서 `Retain`으로 패치했다.
+
+```bash
+PV=$(kubectl -n omniverse get pvc nucleus-data-omniverse-nucleus-0 -o jsonpath='{.spec.volumeName}')
+kubectl patch pv "$PV" -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+```
+
+보호 범위는 다음처럼 구분한다.
+
+| 장애/삭제 상황 | 데이터 보존 기대 | 필요한 보호장치 |
+| --- | --- | --- |
+| Nucleus Pod 재시작/삭제 | 유지 | StatefulSet + PVC |
+| StatefulSet 삭제 | PVC가 남으면 유지 | `persistentVolumeClaimRetentionPolicy: Retain` |
+| PVC 실수 삭제 | PV/RBD 보존 가능 | PV `persistentVolumeReclaimPolicy: Retain` |
+| 단일 OSD/노드 장애 | Ceph 복제로 유지 기대 | Ceph pool `replicated.size: 3`, `failureDomain: host` |
+| Ceph cluster/pool 자체 손상 | 보장 불가 | VolumeSnapshot, RBD mirroring, 외부 백업 필요 |
+| 사이트/클러스터 전체 손실 | 보장 불가 | 별도 클러스터/오브젝트 스토리지/NAS 등 off-cluster backup 필요 |
+
+중요: StorageClass의 `reclaimPolicy: Retain`은 앞으로 새로 만들어질 PV에 적용된다. 이미 생성된 Nucleus PV는 StorageClass를 바꿔도 자동 변경되지 않으므로 현재 PV를 직접 patch했다. 운영 전에는 Nucleus 전용 StorageClass 예: `rook-ceph-block-retain`을 만들고, 처음 PVC를 만들 때부터 그 StorageClass를 쓰는 방향이 좋다.
+
 ## 2026-07-10 로그인 및 RBD persistence 확인
 
 Isaac Sim/Nucleus 클라이언트에서 `10.34.48.221`로 접속 후 `omniverse` 계정 로그인이 성공했다. `nucleus-auth` 로그에서 다음 이벤트를 확인했다.
