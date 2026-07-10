@@ -160,6 +160,191 @@ argocd/minix/apps/omniverse-nucleus-poc/
 | `15-internal-services.yaml` | Compose service DNS를 Kubernetes Service로 대체 |
 | `20-service.yaml` | MetalLB LoadBalancer 외부 노출 |
 
+## 7.1 Manifest 상세와 다음에 수정할 값
+
+전체 YAML 본문은 런북에 중복 복붙하지 않고 같은 디렉터리의 실제 적용 원본을 기준으로 관리한다. 즉, ArgoCD가 실제로 읽는 원본은 아래 manifest 파일들이고, 런북은 각 파일이 무엇을 만들고 다음 사람이 어디를 바꿔야 하는지 설명한다.
+
+### `00-namespace.yaml`
+
+생성 리소스:
+
+```text
+kind: Namespace
+metadata.name: omniverse
+```
+
+역할:
+
+- Nucleus 전용 namespace를 만든다.
+- Secret, StatefulSet, Service가 모두 이 namespace에 생성된다.
+
+다음에 바꿀 수 있는 값:
+
+- namespace 이름을 바꾸려면 모든 manifest의 `metadata.namespace`도 같이 바꿔야 한다.
+- 현재는 `omniverse` 유지가 권장된다.
+
+### `00-headless-service.yaml`
+
+생성 리소스:
+
+```text
+kind: Service
+metadata.name: omniverse-nucleus-headless
+spec.clusterIP: None
+```
+
+역할:
+
+- StatefulSet `serviceName`으로 사용한다.
+- Pod identity와 DNS를 안정적으로 잡기 위한 headless service이다.
+
+다음에 바꿀 수 있는 값:
+
+- 보통 변경하지 않는다.
+- StatefulSet 이름을 바꾸면 selector label만 같이 맞춘다.
+
+### `10-statefulset.yaml`
+
+생성 리소스:
+
+```text
+kind: StatefulSet
+metadata.name: omniverse-nucleus
+spec.replicas: 1
+volumeClaimTemplates:
+  storageClassName: rook-ceph-block
+  size: 10Gi
+```
+
+역할:
+
+- 실제 NVIDIA Nucleus container 12개를 실행한다.
+- `nvcr.io/nvidia/omniverse/*` 이미지를 사용한다.
+- Rook-Ceph RBD PVC를 만들고 `/var/lib/omni/nucleus-data`에 마운트한다.
+- `imagePullSecrets: nvcr-io`로 NGC private registry 인증을 사용한다.
+
+현재 중요한 값:
+
+```text
+DATA_ROOT=/var/lib/omni/nucleus-data
+SERVER_IP_OR_HOST=10.34.48.221
+WEB_PORT=8080
+SERVICE_API_PORT=3006
+storageClassName=rook-ceph-block
+storage=10Gi
+nodeName=com3    # 임시 우회값
+```
+
+다음에 반드시 확인/수정할 값:
+
+| 항목 | 현재 값 | 다음 작업 |
+| --- | --- | --- |
+| `SERVER_IP_OR_HOST` | `10.34.48.221` | MetalLB IP 또는 DNS에 맞게 변경 |
+| `storageClassName` | `rook-ceph-block` | 실제 클러스터 StorageClass에 맞게 변경 |
+| PVC size | `10Gi` | 운영 용량으로 증설 |
+| `nodeName` | `com3` | scheduler 복구 후 제거 |
+| image tag | NVIDIA Compose Stack `2023.2.10` 기준 | 새 버전 사용 시 Compose artifact와 함께 재검증 |
+| Secret refs | `nvcr-io`, `nucleus-secrets`, `nucleus-passwords` | 운영 전 ExternalSecrets로 변경 |
+
+중요:
+
+- `nodeName: com3`는 운영 설정이 아니라 현재 클러스터 scheduler 문제를 우회하기 위한 임시값이다.
+- 운영 전에는 `nodeName`을 제거하고 `nodeSelector`, `affinity`, `tolerations`, `resources` 기반으로 배치해야 한다.
+
+### `15-internal-services.yaml`
+
+생성 리소스:
+
+```text
+kind: Service
+metadata.name: nucleus-api
+metadata.name: nucleus-lft
+metadata.name: nucleus-lft-lb
+metadata.name: nucleus-log-processor
+metadata.name: nucleus-resolver-cache
+metadata.name: nucleus-discovery
+metadata.name: nucleus-auth
+metadata.name: nucleus-navigator
+metadata.name: nucleus-search
+metadata.name: nucleus-thumbnails
+metadata.name: nucleus-tagging
+metadata.name: utl-monpx
+```
+
+역할:
+
+- Docker Compose의 service name DNS를 Kubernetes Service DNS로 대체한다.
+- 예를 들어 Compose에서 `nucleus-api:3006`으로 붙던 것을 Kubernetes에서도 같은 이름으로 붙을 수 있게 한다.
+- 내부 bootstrap 문제를 피하기 위해 `publishNotReadyAddresses: true`를 사용한다.
+
+다음에 바꿀 수 있는 값:
+
+- 외부 노출용이 아니므로 대부분 변경하지 않는다.
+- container port나 service name을 바꾸면 StatefulSet env와 같이 맞춰야 한다.
+- `nucleus-api`의 `3006` 포트는 내부용으로만 유지하고 외부 LoadBalancer에는 열지 않는다.
+
+### `20-service.yaml`
+
+생성 리소스:
+
+```text
+kind: Service
+type: LoadBalancer
+metadata.name: omniverse-nucleus
+annotation: metallb.io/loadBalancerIPs: 10.34.48.221
+```
+
+역할:
+
+- 브라우저에서 접속할 수 있는 외부 IP를 제공한다.
+- 현재 URL은 `http://10.34.48.221:8080/`이다.
+- 외부 `8080`은 Pod 내부 Navigator `80`으로 연결한다.
+
+현재 중요한 값:
+
+```text
+metallb.io/loadBalancerIPs=10.34.48.221
+port=8080
+targetPort=80
+```
+
+다음에 반드시 확인/수정할 값:
+
+| 항목 | 현재 값 | 다음 작업 |
+| --- | --- | --- |
+| LoadBalancer IP | `10.34.48.221` | 사용 가능한 MetalLB IP로 변경 |
+| web port | `8080` | 운영 정책에 맞게 80/443/Ingress로 변경 가능 |
+| targetPort | `80` | Navigator UI가 뜨는 포트이므로 유지 |
+| TLS | 없음 | 운영 시 Ingress/Gateway/TLS 검토 |
+
+주의:
+
+- `10.34.48.220`은 ArgoCD에서 이미 사용 중이어서 Nucleus는 `10.34.48.221`을 사용했다.
+- MetalLB에서는 `spec.loadBalancerIP`와 `metallb.io/loadBalancerIPs`를 동시에 쓰지 않는다. 현재 manifest는 annotation만 사용한다.
+
+### Git에 올리지 않는 것
+
+아래 값들은 manifest 원본에 직접 넣지 않는다.
+
+```text
+NGC API Key
+Nucleus admin password
+Nucleus service password
+Auth signing key
+Discovery token
+Salt 값
+SAML metadata 실제 값
+NVIDIA Compose artifact 원본
+```
+
+대신 다음 runtime Secret 또는 ExternalSecret으로 주입한다.
+
+```text
+nvcr-io
+nucleus-secrets
+nucleus-passwords
+```
+
 ## 8. 실제 재현 절차
 
 ### 8.1 NGC artifact 다운로드
@@ -195,7 +380,7 @@ docker login nvcr.io
 # Password: NGC API Key
 ```
 
-Kubernetes에서는 Docker login 대신 imagePullSecret을 만든다.
+Kubernetes에서는 Docker login 대신 imagePullSecret을 만든다. 여기서 사용자가 실제 NGC key를 입력해야 하는 위치는 `<NGC_API_KEY>` 한 곳이다. 이 값은 Git에 절대 커밋하지 않는다.
 
 ```bash
 kubectl -n omniverse create secret docker-registry nvcr-io \
@@ -204,9 +389,18 @@ kubectl -n omniverse create secret docker-registry nvcr-io \
   --docker-password='<NGC_API_KEY>'
 ```
 
+입력 기준:
+
+| 값 | 입력 내용 | Git 커밋 여부 |
+| --- | --- | --- |
+| `--docker-server` | `nvcr.io` | 가능 |
+| `--docker-username` | `$oauthtoken` | 가능 |
+| `--docker-password` | NGC Personal/API Key | 금지 |
+
 주의:
 
 - API key는 Git에 넣지 않는다.
+- README, RUNBOOK, YAML manifest에도 실제 key를 쓰지 않는다.
 - 채팅/터미널 기록에 노출된 키는 테스트 후 revoke/rotate한다.
 - 운영 전에는 OpenBao + External-Secrets로 관리한다.
 
