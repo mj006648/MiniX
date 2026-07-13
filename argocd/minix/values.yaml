@@ -295,7 +295,7 @@ applications:
           valueFiles:
             - "argocd/minix/apps/milvus/values.yaml"
     ollama:
-      enabled: true
+      enabled: false
       namespace: ollama
       syncWave: "21" # Milvus(20) 다음에 배포
       source:
