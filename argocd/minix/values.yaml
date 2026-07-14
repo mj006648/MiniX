@@ -388,3 +388,18 @@ applications:
           releaseName: open-webui
           valueFiles:
             - "argocd/minix/apps/open-webui/values.yaml"
+
+    # Wave 32: shared registry for large Isaac Sim images
+    harbor:
+      enabled: true
+      namespace: harbor
+      syncWave: "32"
+      source:
+        type: helm
+        repoURL: https://helm.goharbor.io
+        chart: harbor
+        targetRevision: 1.19.1
+        helm:
+          releaseName: harbor
+          valueFiles:
+            - "argocd/minix/apps/harbor/values.yaml"

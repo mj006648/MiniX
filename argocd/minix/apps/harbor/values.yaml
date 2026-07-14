@@ -1,0 +1,109 @@
+# MiniX Harbor values, adapted from SmartX-Team/TwinX-Ops.
+# Lab phase: expose by MetalLB over HTTP. Add trusted TLS before wider access.
+expose:
+  type: loadBalancer
+  loadBalancer:
+    name: harbor
+    IP: 10.34.48.223
+    annotations:
+      metallb.io/address-pool: primary-pool
+  tls:
+    enabled: false
+
+externalURL: http://10.34.48.223
+
+persistence:
+  enabled: true
+  resourcePolicy: keep
+  persistentVolumeClaim:
+    registry:
+      storageClass: rook-ceph-block
+      accessMode: ReadWriteOnce
+      size: 100Gi
+    jobservice:
+      jobLog:
+        storageClass: rook-ceph-block
+        accessMode: ReadWriteOnce
+        size: 5Gi
+    database:
+      storageClass: rook-ceph-block
+      accessMode: ReadWriteOnce
+      size: 5Gi
+    redis:
+      storageClass: rook-ceph-block
+      accessMode: ReadWriteOnce
+      size: 1Gi
+    trivy:
+      storageClass: rook-ceph-block
+      accessMode: ReadWriteOnce
+      size: 10Gi
+
+# Created out-of-band in the harbor namespace; no password is committed to Git.
+existingSecretAdminPassword: harbor-admin
+existingSecretAdminPasswordKey: HARBOR_ADMIN_PASSWORD
+
+portal:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+core:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+jobservice:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+registry:
+  resources:
+    requests:
+      cpu: 150m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+database:
+  internal:
+    resources:
+      requests:
+        cpu: 300m
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+
+redis:
+  internal:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+trivy:
+  enabled: true
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
