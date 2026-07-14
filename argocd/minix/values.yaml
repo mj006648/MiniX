@@ -389,11 +389,11 @@ applications:
           valueFiles:
             - "argocd/minix/apps/open-webui/values.yaml"
 
-    # Wave 32: shared registry for large Isaac Sim images
+    # Wave 4: shared registry after storage and load-balancer infrastructure
     harbor:
       enabled: true
       namespace: harbor
-      syncWave: "32"
+      syncWave: "4"
       source:
         type: helm
         repoURL: https://helm.goharbor.io
