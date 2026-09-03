@@ -4,3 +4,15 @@ sparkJobNamespace: "spark-operator"
 # Webhook 활성화
 webhook:
   enable: true
+
+# Argo CD가 Helm hook 리소스를 정리해도 컨트롤러 자격증명이 사라지지 않도록
+# ServiceAccount와 클러스터 RBAC은 controller-rbac.yaml에서 일반 리소스로 관리합니다.
+serviceAccounts:
+  sparkoperator:
+    create: false
+    name: spark-operator
+
+rbac:
+  create: false
+  createClusterRole: false
+  createRole: true

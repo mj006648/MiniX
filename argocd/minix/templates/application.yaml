@@ -25,12 +25,14 @@ spec:
     - repoURL: {{ $.Values.argo.sourceRepo.url }}
       targetRevision: {{ $.Values.argo.sourceRepo.branch }}
       ref: values
-    # 만약 커스텀 메니페스트들이 있다면 경로 추가
-    #   {{- if $app.source.path }}
-    # - repoURL: {{ $.Values.argo.sourceRepo.url }}
-    #   path: {{ $app.source.path }}
-    #   targetRevision: {{ $.Values.argo.sourceRepo.branch }}
-    #   {{- end }}
+    {{- if $app.source.extraManifestsPath }}
+    - repoURL: {{ $.Values.argo.sourceRepo.url }}
+      path: {{ $app.source.extraManifestsPath }}
+      targetRevision: {{ $.Values.argo.sourceRepo.branch }}
+      directory:
+        exclude: values.yaml
+        recurse: true
+    {{- end }}
   {{- else if $app.source.path }}
   # CASE 2: 오직 메니페스트만 있는 경우
   source: # 이 경우는 소스가 하나이므로 'source:' (단수형)

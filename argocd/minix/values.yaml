@@ -246,6 +246,7 @@ applications:
           values: |
             cleanupJob:
               enabled: false
+        extraManifestsPath: "argocd/minix/apps/spark-operator"
     superset:
       enabled: false
       namespace: superset
